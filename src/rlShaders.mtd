@@ -1,0 +1,5 @@
+[node rlGgx]
+    desc                    STRING      ""
+    maya.name               STRING      "rlGgx"
+    maya.classification     STRING      "shader/surface"
+    maya.id                 INT         0x04700001

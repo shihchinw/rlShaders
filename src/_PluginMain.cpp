@@ -2,6 +2,7 @@
 #include <ai.h>
 
 extern  AtNodeMethods *GgxMethod;
+extern  AtNodeMethods *DisneyMethod;
 
 enum    ShaderId
 {
@@ -17,6 +18,13 @@ node_loader
             node->methods = GgxMethod;
             node->output_type = AI_TYPE_RGB;
             node->name = "rlGgx";
+            node->node_type = AI_NODE_SHADER;
+            break;
+
+        case kDisney:
+            node->methods = DisneyMethod;
+            node->output_type = AI_TYPE_RGB;
+            node->name = "rlDisney";
             node->node_type = AI_NODE_SHADER;
             break;
 

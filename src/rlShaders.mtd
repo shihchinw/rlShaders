@@ -3,3 +3,9 @@
     maya.name               STRING      "rlGgx"
     maya.classification     STRING      "shader/surface"
     maya.id                 INT         0x04700001
+
+[node rlDisney]
+    desc                    STRING      ""
+    maya.name               STRING      "rlDisney"
+    maya.classification     STRING      "shader/surface"
+    maya.id                 INT         0x04700002

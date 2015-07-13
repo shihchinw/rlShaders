@@ -20,6 +20,8 @@ enum    GgxParams
     p_opacity,
 };
 
+namespace
+{
 
 struct  ShaderData
 {
@@ -35,8 +37,8 @@ struct  ShaderData
     void    update()
     {
         AtNode *options = AiUniverseGetOptions();
-        
-        mMaxRayDepth = AiNodeGetInt(options, "GI_total_depth");        
+
+        mMaxRayDepth = AiNodeGetInt(options, "GI_total_depth");
         mRefractionDepth = AiNodeGetInt(options, "GI_refraction_depth");
 
         auto refractionSampleNum = AiNodeGetInt(options, "GI_refraction_samples");
@@ -56,10 +58,11 @@ struct  ShaderData
 
 private:
     AtSampler   *mRefractionSampler;
-    int         mMaxRayDepth;    
+    int         mMaxRayDepth;
     int         mRefractionDepth;
 };
 
+}
 
 class   GgxSampler
 {
@@ -96,7 +99,7 @@ public:
     GgxSampler(AtNode *node, AtShaderGlobals *sg)
     {
         mSpecularColor = AiShaderEvalParamRGB(p_Ks_color);
-        
+
         bool isEntering = AiV3Dot(sg->N, sg->Rd) < AI_EPSILON;
         mIorIn = 1.0f;
         mIorOut = AiShaderEvalParamFlt(p_ior);
@@ -105,7 +108,7 @@ public:
         }
 
         mViewDir = -sg->Rd;
-        mAxisN = sg->Nf;        
+        mAxisN = sg->Nf;
         AiBuildLocalFramePolar(&mAxisU, &mAxisV, &mAxisN);
 
         // Remap the roughness value to approximate the highlight range in aiStandard.
@@ -118,7 +121,7 @@ public:
         if (AiColorIsSmall(mSpecularColor)) {
             return AI_RGB_BLACK;
         }
-        
+
         return mSpecularColor * reflection(mViewDir, L, mAxisN) * AiV3Dot(L, mAxisN);
     }
 
@@ -156,12 +159,11 @@ public:
     //! Sample indirect radiance.
     AtColor     integrateRefract(AtShaderGlobals *sg, const ShaderData *data)
     {
-
         AtRay       ray;
         AtScrSample scrs;
         AiMakeRay(&ray, AI_RAY_REFRACTED, &sg->P, nullptr, AI_BIG, sg);
 
-        if (!data->shouldTraceRefract(sg)) {            
+        if (!data->shouldTraceRefract(sg)) {
             bool isRefracted = AiRefractRay(&ray, &sg->Nf, mIorIn, mIorOut, sg);
 
             if (isRefracted) {
@@ -169,7 +171,7 @@ public:
                 AiTraceBackground(&ray, &scrs);
                 return scrs.color * weight;
             }
-                        
+
             return AI_RGB_BLACK;    // Total internal reflection!
         }
 
@@ -180,7 +182,7 @@ public:
         while (AiSamplerGetSample(sampleIter, samples)) {
             AtVector m = sampleMicrofacetNormal(samples[0], samples[1]);
             bool isRefracted = AiRefractRay(&ray, &m, mIorIn, mIorOut, sg);
-            
+
             if (!isRefracted) {
                 // Total internal reflection
                 AiReflectRay(&ray, &m, sg);
@@ -193,7 +195,7 @@ public:
 
             result += scrs.color * getSampleWeight(mViewDir, ray.dir, m);
         }
-        
+
         return result * AiSamplerGetSampleInvCount(sampleIter);
     }
 
@@ -230,7 +232,7 @@ private:
     //! Generate the normal of microfacet according to GGX distribution.
     AtVector    sampleMicrofacetNormal(float rx, float ry) const
     {
-        auto thetaM = atanf((mRoughness) * sqrtf(rx / (1.0f - rx)));
+        auto thetaM = atanf(mRoughness * sqrtf(rx / (1.0f - rx)));
         auto phiM = AI_PITIMES2 * ry;
 
         AtVector omega;
@@ -242,7 +244,7 @@ private:
 
         AiV3RotateToFrame(omega, mAxisU, mAxisV, mAxisN);
         return omega;
-    }   
+    }
 
     AtVector    getReflectDirection(const AtVector &i, const AtVector &m) const
     {
@@ -272,7 +274,7 @@ private:
         auto MdotN = ABS(AiV3Dot(m, mAxisN));
         return D(m, mAxisN) * MdotN * 0.25f / IdotM;
     }
-    
+
     //! Return the sample weight for importance sampling of BSDF. (Eq.41)
     float   getSampleWeight(const AtVector &i, const AtVector &o, const AtVector &m) const
     {
@@ -291,7 +293,7 @@ private:
 
         float LdotN = ABS(AiV3Dot(o, n));
         float VdotN = ABS(AiV3Dot(i, n));
-        
+
         return reflectWeight * G(i, o, hr, n) * D(hr, n) * 0.25f / (LdotN * VdotN);
     }
 
@@ -309,7 +311,7 @@ private:
         float denominator = OdotN * IdotN * SQR(mIorIn * IdotH + mIorOut * OdotH);
         return ABS(OdotH * IdotH) * SQR(mIorOut) * refractWeight * G(i, o, ht, n) * D(ht, n) / denominator;
     }
-    
+
     //! The normal distribution with GGX formula. (Eq.33)
     float   D(const AtVector &m, const AtVector &n) const
     {
@@ -331,9 +333,9 @@ private:
     {
         float VdotM = AiV3Dot(v, m);
         float VdotN = AiV3Dot(v, n);
-        
+
         if (VdotM * VdotN < 0.0f) {
-            // Replace division with multiplication, since we only needs the sign.
+            // Replace division with multiplication, since we only need the sign.
             return 0.0f;
         }
 
@@ -364,7 +366,7 @@ node_parameters
     AiParameterFLT("Ks", 0.5f);
     AiMetaDataSetFlt(mds, "Ks", "min", 0.0f);
     AiMetaDataSetFlt(mds, "Ks", "max", 1.0f);
-    
+
     AiParameterRGB("KtColor", 1.0f, 1.0f, 1.0f);
     AiParameterFLT("Kt", 0.0f);
     AiMetaDataSetFlt(mds, "Kt", "min", 0.0f);
@@ -426,10 +428,10 @@ shader_evaluate
     AtNode *options = AiUniverseGetOptions();
     auto maxDiffuseDepth = AiNodeGetInt(options, "GI_diffuse_depth");
     auto maxGlossyDepth = AiNodeGetInt(options, "GI_glossy_depth");
-   
+
     auto roughness = AiShaderEvalParamFlt(p_roughness);
     auto diffData = AiOrenNayarMISCreateData(sg, roughness);
-    
+
     auto diffuseWeight = AiShaderEvalParamFlt(p_Kd);
     auto diffuseColor = AiShaderEvalParamRGB(p_Kd_color) * diffuseWeight;
     bool sampleDiffuse = !AiColorIsSmall(diffuseColor) && sg->Rr_diff < maxDiffuseDepth;
@@ -440,7 +442,7 @@ shader_evaluate
     AiLightsPrepare(sg);
     while (AiLightsGetSample(sg)) {
         if (AiLightGetAffectDiffuse(sg->Lp) && sampleDiffuse) {
-            diffuse += AiEvaluateLightSample(sg, diffData, 
+            diffuse += AiEvaluateLightSample(sg, diffData,
                             AiOrenNayarMISSample, AiOrenNayarMISBRDF, AiOrenNayarMISPDF);
         }
 
@@ -457,7 +459,7 @@ shader_evaluate
     AtColor transmission = AiColorIsSmall(ktColor) ? AI_RGB_BLACK : sampler.integrateRefract(sg, data) * ktColor;
 
     AtColor result = diffuseColor * diffuse + specularWeight * specular + transmission;
-    
+
     if (sg->Rr > 0) {
         sg->out.RGB = result;
         return;
@@ -465,7 +467,7 @@ shader_evaluate
 
     auto indirectDiffuse = sampleDiffuse ? AiOrenNayarIntegrate(&sg->Nf, sg, roughness) : AI_RGB_BLACK;
     auto indirectGlossy = sampler.integrateGlossy(sg) * specularWeight;
-    
+
     result += diffuseColor * indirectDiffuse + indirectGlossy;
     sg->out.RGB = result;
 }

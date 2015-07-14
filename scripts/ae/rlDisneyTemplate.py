@@ -28,6 +28,8 @@ class AErlDisneyTemplate(ShaderAETemplate):
         self.addControl("clearcoat_gloss");
         self.endLayout()
 
+        self.addBumpLayout()
+
         # include/call base class/node attributes
         pm.mel.AEdependNodeTemplate(self.nodeName)
 

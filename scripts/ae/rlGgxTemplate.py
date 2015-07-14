@@ -35,6 +35,8 @@ class AErlGgxTemplate(ShaderAETemplate):
         self.addControl("Kt", label="Weight");
         self.endLayout()
 
+        self.addBumpLayout()
+
         # include/call base class/node attributes
         pm.mel.AEdependNodeTemplate(self.nodeName)
 

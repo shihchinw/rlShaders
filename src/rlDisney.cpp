@@ -9,6 +9,7 @@
 #include <cassert>
 
 #include <ai.h>
+//#include "rlUtil.h"
 
 AI_SHADER_NODE_EXPORT_METHODS(DisneyMethod);
 
@@ -105,19 +106,31 @@ public:
     static AtVector evalSample(const void *brdf, float rx, float ry)
     {
         const auto *disneyBrdf = static_cast<const DisneySampler*>(brdf);
+        if (disneyBrdf->mSampleType == AI_RAY_DIFFUSE) {
+            return disneyBrdf->sampleDiffuseDirection(rx, ry);
+        }
+
         return disneyBrdf->sampleSpecularDirection(rx, ry);
     }
 
     //! Return the reflectance
     static AtColor  evalBrdf(const void *brdf, const AtVector *indir)
     {
-        if (AiV3IsZero(*indir)) {
+        const auto L = *indir;
+
+        if (AiV3IsZero(L)) {
             // TODO: Check how did this happen...
             return AI_RGB_BLACK;
         }
 
         const auto *disneyBrdf = static_cast<const DisneySampler*>(brdf);
-        return disneyBrdf->evalSpecular(*indir) * AiV3Dot(*indir, disneyBrdf->mAxisN);
+        auto NdotL = AiV3Dot(disneyBrdf->mAxisN, L);
+
+        if (disneyBrdf->mSampleType == AI_RAY_DIFFUSE) {
+            return disneyBrdf->evalDiffuse(L) * NdotL;
+        }
+
+        return disneyBrdf->evalSpecular(L) * NdotL;
     }
 
     static float evalPdf(const void *brdf, const AtVector *indir)
@@ -128,9 +141,12 @@ public:
         }
 
         const auto *disneyBrdf = static_cast<const DisneySampler*>(brdf);
+        if (disneyBrdf->mSampleType == AI_RAY_DIFFUSE) {
+            return disneyBrdf->evalDiffusePdf(*indir);
+        }
+
         return disneyBrdf->evalSpecularPdf(*indir);
     }
-
 
 public:
     DisneySampler(AtNode *node, AtShaderGlobals *sg)
@@ -171,9 +187,13 @@ public:
         mSheenColor = LERP(mSheenTint, AI_RGB_WHITE, tintColor) * mSheen;
     }
 
-    AtColor     evalDiffuse(AtShaderGlobals *sg)
+    inline void setSampleType(AtUInt16 type)
     {
-        const auto L = sg->Ld;
+        mSampleType = type;
+    }
+
+    AtColor     evalDiffuse(const AtVector &L) const
+    {
         float LdotN = AiV3Dot(L, mAxisN);
         float VdotN = AiV3Dot(mViewDir, mAxisN);
 
@@ -207,11 +227,7 @@ public:
         float Fss = LERP(FL, 1.0f, Fss90) * LERP(FV, 1.0f, Fss90);
         float ssFactor = 1.25f * (Fss * (1.0f / (LdotN + VdotN) - 0.5f) + 0.5f);
 
-        // Sheen
-        float FH = powf(CLAMP(1.0f - LdotH, 0.0f, 1.0f), 5.0f);
-        auto Fsheen = FH * mSheenColor;
-
-        auto diffuse = mBaseColor * AI_ONEOVERPI * LERP(mSubsurface, diffuseFactor, ssFactor) + Fsheen;
+        auto diffuse = mBaseColor * AI_ONEOVERPI * LERP(mSubsurface, diffuseFactor, ssFactor);
         return diffuse * (1.0f - mMetallic);
     }
 
@@ -219,6 +235,9 @@ public:
     //! Use importance smapling according to cosTheta.
     AtColor     integrateDiffuse(AtShaderGlobals *sg, const ShaderData *data)
     {
+        setSampleType(AI_RAY_DIFFUSE);
+        //return AiBRDFIntegrate(sg, this, evalSample, evalBrdf, evalPdf, AI_RAY_DIFFUSE);
+
         AtRay       ray;
         AtScrSample scrs;
         AiMakeRay(&ray, AI_RAY_DIFFUSE, &sg->P, nullptr, AI_BIG, sg);
@@ -230,24 +249,30 @@ public:
         while (AiSamplerGetSample(sampleIter, samples)) {
             ray.dir = sampleDiffuseDirection(samples[0], samples[1]);
 
-            if (!AiTrace(&ray, &scrs)) {
-                AiTraceBackground(&ray, &scrs);
+            if (AiTrace(&ray, &scrs)) {
+                result += scrs.color * evalDiffuse(ray.dir);
             }
-
-            result += scrs.color * AiV3Dot(ray.dir, sg->Nf);
         }
 
-        return result * AiSamplerGetSampleInvCount(sampleIter) * AI_ONEOVERPI;
+        return result * AiSamplerGetSampleInvCount(sampleIter) * AI_PI;
+    }
+
+    AtColor     evalDiffuseLightSample(AtShaderGlobals *sg)
+    {
+        setSampleType(AI_RAY_DIFFUSE);
+        return AiEvaluateLightSample(sg, this, evalSample, evalBrdf, evalPdf);
     }
 
     //! Evaluate MIS with light and glossy lobes.
     AtColor     evalSpecularLightSample(AtShaderGlobals *sg)
     {
+        setSampleType(AI_RAY_GLOSSY);
         return AiEvaluateLightSample(sg, this, evalSample, evalBrdf, evalPdf);
     }
 
     AtColor     integrateGlossy(AtShaderGlobals *sg)
     {
+        setSampleType(AI_RAY_GLOSSY);
         return AiBRDFIntegrate(sg, this, evalSample, evalBrdf, evalPdf, AI_RAY_GLOSSY);
     }
 
@@ -255,6 +280,8 @@ public:
     //! @note: This is used to study what is the behavior of AiBRDFIntegrate.
     AtColor     integrateGlossy(AtShaderGlobals *sg, const ShaderData *data)
     {
+        setSampleType(AI_RAY_GLOSSY);
+
         AtRay       ray;
         AtScrSample scrs;
         AiMakeRay(&ray, AI_RAY_GLOSSY, &sg->P, nullptr, AI_BIG, sg);
@@ -267,7 +294,8 @@ public:
             ray.dir = evalSample(this, samples[0], samples[1]);
 
             if (!AiTrace(&ray, &scrs)) {
-                AiTraceBackground(&ray, &scrs);
+                //AiTraceBackground(&ray, &scrs);
+                continue;
             }
 
             auto pdf = evalPdf(this, &ray.dir);
@@ -313,9 +341,11 @@ private:
         float Fr = LERP(FH, clearcoatF0, 1.0f);
         float Gr = smithG_GGX(LdotN, clearcoatRoughness) * smithG_GGX(VdotN, clearcoatRoughness);
 
+        auto Fsheen = FH * mSheenColor * (1.0f - mMetallic);
+
         // The denominator for specular reflection (4 * LdotN * VdotN) has been already
         // separated into smithG_GGX. We don't have to divide it again.
-        return Ds * Fs * Gs + mClearcoat * Dr * Fr * Gr;
+        return (Ds * Fs * Gs + mClearcoat * Dr * Fr * Gr) + Fsheen;
     }
 
     static AtVector sphericalDirection(float cosTheta, float phi)
@@ -335,36 +365,36 @@ private:
 
     AtVector   concentricDiskSample(float rx, float ry) const
     {
-        float r, phi;
-
-        if (rx > -ry && rx > ry) {
-            r = rx;
-            phi = ry / rx;
-        } else if (rx < ry && rx > -ry) {
-            r = ry;
-            phi = (2.0f - rx / ry);
-        } else if (rx < -ry && rx < ry) {
-            r = -rx;
-            phi = 4.0f + ry / rx;
-        } else {
-            r = -ry;
-            phi = 6.0f - rx / ry;
-        }
-
-        phi *= AI_PIOVER2 * 0.5f;
+        rx = rx * 2.0f - 1.0f;
+        ry = ry * 2.0f - 1.0f;
 
         AtVector result;
+        if (rx == 0.0f && ry == 0.0f) {
+            // Handle degenerate case
+            result.x = result.y = 0.0f;
+            return result;
+        }
+
+        float r, phi;
+        if (ABS(rx) > ABS(ry)) {
+            r = rx;
+            phi = AI_PIOVER2 * 0.5f * ry / rx;
+        } else {
+            r = ry;
+            phi = AI_PIOVER2 * (1.0f - 0.5f * rx / ry);
+        }
+
         result.x = r * cosf(phi);
         result.y = r * sinf(phi);
         return result;
     }
 
-    //! Sample hemisphere according to projected solidangle.
+    //! Sample hemisphere according to cosine-weighted solidangle.
     AtVector    sampleDiffuseDirection(float rx, float ry) const
     {
-        // Concentric disk sample
         AtVector omega = concentricDiskSample(rx, ry);
         omega.z = sqrtf(MAX(0.0f, 1.0f - SQR(omega.x) - SQR(omega.y)));
+        AiV3RotateToFrame(omega, mAxisU, mAxisV, mAxisN);
         return omega;
     }
 
@@ -376,7 +406,7 @@ private:
 
         float gtr2Weight = 1.0f / (mClearcoat + 1.0f);
 
-        if (rx <= gtr2Weight) {
+        if (rx < gtr2Weight) {
             rx /= gtr2Weight;
             M = sampleGTR2AnisoDirection(rx, ry);
         } else {
@@ -420,6 +450,12 @@ private:
         AtVector omega = sphericalDirection(cosf(thetaM), phiM);
         AiV3RotateToFrame(omega, mAxisU, mAxisV, mAxisN);
         return omega;
+    }
+
+    //! Sample over cosine
+    float   evalDiffusePdf(const AtVector &i) const
+    {
+        return MAX(1e-4f, AiV3Dot(i, mAxisN) * AI_ONEOVERPI);
     }
 
     float   evalSpecularPdf(const AtVector &i) const
@@ -493,6 +529,8 @@ private:
 
     float       mSpecularRoughness;
     float       mAlphaX, mAlphaY;
+
+    AtUInt16    mSampleType;
 };
 
 node_parameters
@@ -527,6 +565,18 @@ node_parameters
 
 node_initialize
 {
+    // Dump samples
+    //auto sg = AiShaderGlobals();
+    //sg->Rd = -rls::sphericalDirection(cosf(AI_PIOVER2 * 0.5f), AI_PIOVER2 * 0.0f);
+    //AiV3Create(sg->Nf, 0.0f, 0.0f, 1.0f);
+    //DisneySampler brdf(node, sg);
+    //rls::SampleWriter samplerWiter(1024, 512);
+    ////brdf.setSampleType(AI_RAY_DIFFUSE);
+    //brdf.setSampleType(AI_RAY_GLOSSY);
+
+    //samplerWiter.writeRadiance(sg, brdf);
+    //samplerWiter.writeSample(sg, brdf, 100);
+
     ShaderData *data = new ShaderData;
     AiNodeSetLocalData(node, data);
 }
@@ -570,8 +620,7 @@ shader_evaluate
     AiLightsPrepare(sg);
     while (AiLightsGetSample(sg)) {
         if (AiLightGetAffectDiffuse(sg->Lp)) {
-            float LdotN = AiV3Dot(sg->Ld, sg->Nf);
-            diffuse += sampler.evalDiffuse(sg) * sg->Li * sg->we * LdotN;
+            diffuse += sampler.evalDiffuseLightSample(sg);
         }
 
         if (AiLightGetAffectSpecular(sg->Lp)) {

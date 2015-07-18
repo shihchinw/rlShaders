@@ -15,17 +15,22 @@ class AErlDisneyTemplate(ShaderAETemplate):
 
         # Begins a "Color Section"
         self.beginLayout("Material Attributes", collapse=False)
-        self.addControl("base_color");
-        self.addControl("subsurface");
-        self.addControl("metallic");
-        self.addControl("specular");
-        self.addControl("specular_tint");
-        self.addControl("roughness");
-        self.addControl("anisotropic");
-        self.addControl("sheen");
-        self.addControl("sheen_tint");
-        self.addControl("clearcoat");
-        self.addControl("clearcoat_gloss");
+        self.addControl("base_color")
+        self.addControl("subsurface")
+        self.addControl("metallic")
+        self.addControl("specular")
+        self.addControl("specular_tint")
+        self.addControl("roughness")
+        self.addControl("anisotropic")
+        self.addControl("sheen")
+        self.addControl("sheen_tint")
+        self.addControl("clearcoat")
+        self.addControl("clearcoat_gloss")
+        self.endLayout()
+
+        self.beginLayout("Extended Controls", collapse=False)
+        self.addControl("indirectDiffuseScale")
+        self.addControl("indirectSpecularScale")
         self.endLayout()
 
         self.addBumpLayout()

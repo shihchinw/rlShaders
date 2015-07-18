@@ -33,6 +33,9 @@ enum    DisneyParams
     p_clearcoat_gloss,
     p_opacity,
 
+    p_indirect_diffuse,
+    p_indirect_specular,
+
     p_aov_direct_diffuse,
     p_aov_direct_specular,
     p_aov_indirect_diffuse,
@@ -236,7 +239,7 @@ public:
     AtColor     integrateDiffuse(AtShaderGlobals *sg, const ShaderData *data)
     {
         setSampleType(AI_RAY_DIFFUSE);
-        //return AiBRDFIntegrate(sg, this, evalSample, evalBrdf, evalPdf, AI_RAY_DIFFUSE);
+        return AiBRDFIntegrate(sg, this, evalSample, evalBrdf, evalPdf, AI_RAY_DIFFUSE);
 
         AtRay       ray;
         AtScrSample scrs;
@@ -552,6 +555,12 @@ node_parameters
     }
 
     AiParameterRGB("opacity", 1.0f, 1.0f, 1.0f);
+    AiParameterFlt("indirectDiffuseScale", 1.0f);
+    AiMetaDataSetFlt(mds, "indirectDiffuseScale", "min", 0.0f);
+    AiMetaDataSetFlt(mds, "indirectDiffuseScale", "max", 1.0f);
+    AiParameterFlt("indirectSpecularScale", 1.0f);
+    AiMetaDataSetFlt(mds, "indirectSpecularScale", "min", 0.0f);
+    AiMetaDataSetFlt(mds, "indirectSpecularScale", "max", 1.0f);
 
     AiParameterSTR("aov_direct_diffuse", "direct_diffuse");
     AiMetaDataSetInt(mds, "aov_direct_diffuse", "aov.type", AI_TYPE_RGB);
@@ -626,6 +635,11 @@ shader_evaluate
         if (AiLightGetAffectSpecular(sg->Lp)) {
             specular += sampler.evalSpecularLightSample(sg);
         }
+    }
+
+    if (sg->Rt & (AI_RAY_DIFFUSE | AI_RAY_GLOSSY)) {
+        diffuse *= AiShaderEvalParamFlt(p_indirect_diffuse);
+        specular *= AiShaderEvalParamFlt(p_indirect_specular);
     }
 
     AtColor result = diffuse + specular;

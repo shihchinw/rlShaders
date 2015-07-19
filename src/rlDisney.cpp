@@ -429,7 +429,10 @@ private:
     {
         auto phiH = AI_PITIMES2 * rx;
         auto a2 = SQR(mRoughness);
-        auto cosThetaH = sqrtf((1.0f - pow(a2, 1.0f - ry)) / (1 - a2));
+        auto cosThetaH = a2 == 1.0f
+            ? sqrtf(1.0f - ry)
+            : sqrtf((1.0f - pow(a2, 1.0f - ry)) / (1.0f - a2));
+
         AtVector omega = sphericalDirection(cosThetaH, phiH);
         AiV3RotateToFrame(omega, mAxisU, mAxisV, mAxisN);
         return AiV3Normalize(omega);
@@ -579,12 +582,12 @@ node_initialize
     //sg->Rd = -rls::sphericalDirection(cosf(AI_PIOVER2 * 0.5f), AI_PIOVER2 * 0.0f);
     //AiV3Create(sg->Nf, 0.0f, 0.0f, 1.0f);
     //DisneySampler brdf(node, sg);
-    //rls::SampleWriter samplerWiter(1024, 512);
+    //rls::SampleWriter samplerWiter(512, 256);
     ////brdf.setSampleType(AI_RAY_DIFFUSE);
     //brdf.setSampleType(AI_RAY_GLOSSY);
 
     //samplerWiter.writeRadiance(sg, brdf);
-    //samplerWiter.writeSample(sg, brdf, 100);
+    //samplerWiter.writeSample(sg, brdf, 50);
 
     ShaderData *data = new ShaderData;
     AiNodeSetLocalData(node, data);

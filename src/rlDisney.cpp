@@ -4,6 +4,10 @@
 //      https://github.com/wdas/brdf/blob/master/src/brdfs/disney.brdf
 // [2]  Microfacet Models for Refraction through Rough Surfaces. Bruce Walter et al. EGSR'07
 //      http://www.cs.cornell.edu/~srm/publications/EGSR07-btdf.html
+// [3] 	Importance Sampling Microfacet-Based BSDFs using the Distribution of Visible Normals.
+//      Eric Heitz and Eugene d'Eon. EGSR'14
+//      https://hal.inria.fr/hal-00996995/en
+//      https://hal.inria.fr/hal-00996995v2/file/supplemental1.pdf
 #include <vector>
 #include <set>
 #include <cassert>
@@ -188,6 +192,7 @@ public:
         mSpecularF0 = LERP(mMetallic, metallicColor, mBaseColor);
 
         mSheenColor = LERP(mSheenTint, AI_RGB_WHITE, tintColor) * mSheen;
+        mSampleFromVisibleNormal = true;
     }
 
     inline void setSampleType(AtUInt16 type)
@@ -411,7 +416,9 @@ private:
 
         if (rx < gtr2Weight) {
             rx /= gtr2Weight;
-            M = sampleGTR2AnisoDirection(rx, ry);
+            M = mSampleFromVisibleNormal
+                ? sampleGTR2AnisoDirectionFromSlope(rx, ry)
+                : sampleGTR2AnisoDirection(rx, ry);
         } else {
             rx = (rx - gtr2Weight) / (1.0f - gtr2Weight);
             M = sampleGTR1Direction(rx, ry);
@@ -448,6 +455,94 @@ private:
         return AiV3Normalize(omega);
     }
 
+    AtVector2    sampleGTR2AnisoSlope(float theta, float rx, float ry) const
+    {
+        AtVector2 slope;
+
+        auto uniformSample = [] (float rx, float ry) {
+            AtVector2 slope;
+            float r = sqrtf(rx / (1.0f - rx));
+            float phi = AI_PITIMES2 * ry;
+            slope.x = r * cosf(phi);
+            slope.y = r * sinf(phi);
+            return slope;
+        };
+
+        if (theta < AI_EPSILON) {
+            return uniformSample(rx, ry);
+        }
+
+        float B = tanf(theta);
+        float B2 = SQR(B);
+        float G1 = 2.0f / (1.0f + sqrtf(1.0f + B2));
+
+        // sample slope_x
+        float A = 2.0f * rx / G1 - 1.0f;
+        float A2 = SQR(A);
+        if (ABS(A2 - 1.0f) < AI_EPSILON) {
+            return uniformSample(rx, ry);
+        }
+
+        float tmp = 1.0f / (A2 - 1.0f);
+        float D = sqrtf(MAX(0.0f, B2 * SQR(tmp) - (A2 - B2) * tmp));
+        float slopeX1 = B * tmp - D;
+        float slopeX2 = B * tmp + D;
+        slope.x = (A < 0.0f || slopeX2 > 1.0f / B) ? slopeX1 : slopeX2;
+
+        // sample slope_y
+        float sign = 1.0f;
+        if (ry > 0.5f) {
+            ry = 2.0f * (ry - 0.5f);
+        } else {
+            sign = -1.0f;
+            ry = 2.0f * (0.5f - ry);
+        }
+
+        float z = (ry *(ry *(ry * 0.27385f - 0.73369f) + 0.46341f))
+                / (ry *(ry *(ry * 0.093073f + 0.309420f) - 1.0f) + 0.597999f);
+        slope.y = sign * z * sqrtf(1.0f + SQR(slope.x));
+        return slope;
+    }
+
+    //! The sampling routine from Heitz and d'Eon.
+    //! https://hal.inria.fr/hal-00996995v2/file/supplemental1.pdf
+    AtVector    sampleGTR2AnisoDirectionFromSlope(float rx, float ry) const
+    {
+        auto V = mViewDir;
+
+        // Transform to local frame
+        float cosThetaV = CLAMP(AiV3Dot(mAxisN, V), -1.0f, 1.0f);
+        assert(cosThetaV >= 0.0f);
+        float phiV = atan2f(AiV3Dot(mAxisV, V), AiV3Dot(mAxisU, V));
+        V = sphericalDirection(cosThetaV, phiV);
+
+        // Stretch view direction
+        V.x *= mAlphaX;
+        V.y *= mAlphaY;
+        V = AiV3Normalize(V);
+
+        float theta = 0.0f;
+        float phi = 0.0f;
+
+        if (V.z < (1.0f - AI_EPSILON)) {
+            theta = acosf(V.z);
+            phi = atan2f(V.y, V.x);
+        }
+
+        auto slope = sampleGTR2AnisoSlope(theta, rx, ry);
+
+        // Rotate & unstretch
+        float cosPhi = cosf(phi);
+        float sinPhi = sinf(phi);
+        AtVector omega;
+        omega.x = -(cosPhi * slope.x - sinPhi * slope.y) * mAlphaX;
+        omega.y = -(sinPhi * slope.x + cosPhi * slope.y) * mAlphaY;
+        omega.z = 1.0f;
+
+        AiV3RotateToFrame(omega, mAxisU, mAxisV, mAxisN);
+        return AiV3Normalize(omega);
+    }
+
     AtVector    sampleGTR2Direction(float rx, float ry) const
     {
         auto thetaM = atanf(mRoughness * sqrtf(rx / (1.0f - rx)));
@@ -477,6 +572,14 @@ private:
         float MdotN2 = SQR(MdotN);
 
         auto clearcoatWeight = mClearcoat / (mClearcoat + 1.0f);
+
+        if (mSampleFromVisibleNormal) {
+            auto VdotN = MAX(1e-4f, AiV3Dot(mViewDir, mAxisN));
+            auto Dw = smithG_GGX(IdotM, mSpecularRoughness) * D_GTR2Aniso(m, MdotN2) * 2.0f * IdotM / VdotN;
+            auto D = LERP(clearcoatWeight, Dw, D_GTR1(m, MdotN2) * ABS(MdotN) / IdotM);
+            return D * 0.25f;
+        }
+
         auto D = LERP(clearcoatWeight, D_GTR2Aniso(m, MdotN2), D_GTR1(m, MdotN2));
         return D * ABS(MdotN) * 0.25f / IdotM;
     }
@@ -537,6 +640,7 @@ private:
     float       mAlphaX, mAlphaY;
 
     AtUInt16    mSampleType;
+    bool        mSampleFromVisibleNormal;
 };
 
 node_parameters
@@ -579,7 +683,7 @@ node_initialize
 {
     // Dump samples
     //auto sg = AiShaderGlobals();
-    //sg->Rd = -rls::sphericalDirection(cosf(AI_PIOVER2 * 0.5f), AI_PIOVER2 * 0.0f);
+    //sg->Rd = -rls::sphericalDirection(cosf(1.5f), AI_PIOVER2 * 0.0f);
     //AiV3Create(sg->Nf, 0.0f, 0.0f, 1.0f);
     //DisneySampler brdf(node, sg);
     //rls::SampleWriter samplerWiter(512, 256);

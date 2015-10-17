@@ -22,6 +22,8 @@ inline AtVector sphericalDirection(float cosTheta, float phi)
     return omega;
 }
 
+AtVector   concentricDiskSample(float rx, float ry);
+
 //! Image writer for sampling pattern.
 class   SampleWriter
 {
@@ -109,6 +111,10 @@ public:
 
         while (AiSamplerGetSample(sampleIter, samples)) {
             auto dir = evalSample(samples[0], samples[1]);
+            if (AiV3IsZero(dir)) {
+                continue;
+            }
+
             float theta = acosf(dir.z);
             float phi = atan2f(dir.y, dir.x);
 
@@ -121,6 +127,7 @@ public:
 
             if (theta > AI_PIOVER2) {
                 writePixel(i, j, AI_RGB_RED);
+                AiMsgInfo("[RLS] Theta diff %f!", (theta - AI_PIOVER2) * AI_ONEOVERPI * 180.0f);
                 missingCount++;
             } else {
                 writePixel(i, j, AI_RGB_GREEN);

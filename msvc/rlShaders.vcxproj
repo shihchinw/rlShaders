@@ -15,6 +15,7 @@
     <ClCompile Include="..\src\rlDisney.cpp" />
     <ClCompile Include="..\src\rlGgx.cpp" />
     <ClCompile Include="..\src\rlSssND.cpp" />
+    <ClCompile Include="..\src\rlUtil.cpp" />
     <ClCompile Include="..\src\_PluginMain.cpp" />
   </ItemGroup>
   <ItemGroup>

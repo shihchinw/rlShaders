@@ -4,7 +4,7 @@
   <PropertyGroup Label="UserMacros">
     <MAYA_VER>2015</MAYA_VER>
     <MTOA_ROOT>C:\solidangle\mtoadeploy\$(MAYA_VER)</MTOA_ROOT>
-    <ARNOLD_ROOT>C:\solidangle\Arnold-4.2.7.4-windows</ARNOLD_ROOT>
+    <ARNOLD_ROOT>C:\solidangle\Arnold-4.2.10.0-windows</ARNOLD_ROOT>
   </PropertyGroup>
   <PropertyGroup>
     <OutDir>build\$(Platform)\$(Configuration)\</OutDir>
@@ -13,6 +13,7 @@
   <ItemDefinitionGroup>
     <ClCompile>
       <AdditionalIncludeDirectories>$(ARNOLD_ROOT)\include;$(MTOA_ROOT)\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>_CRT_SECURE_NO_DEPRECATE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
     </ClCompile>
     <Link>
       <AdditionalLibraryDirectories>$(ARNOLD_ROOT)\lib;$(MTOA_ROOT)\lib</AdditionalLibraryDirectories>

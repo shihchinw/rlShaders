@@ -366,6 +366,8 @@ public:
         AtSamplerIterator *sampleIter = data->getSssSamplerIter(sg);
         float   samples[2];
 
+        float validSampleCount = 0.0f;
+
         while (AiSamplerGetSample(sampleIter, samples)) {
             float r = getProbeRay(samples[0], samples[1], sampleIdx++, sg->P, ray);
 
@@ -378,7 +380,8 @@ public:
             msgData->No = sg->Ns;
 
             // AiTrace would split the shading tree with ray type "kSssProbeRay".
-            if (AiTrace(&ray, &scrs)) {
+            if (traceProbe(sg, ray, data, msgData)) {
+            //if (AiTrace(&ray, &scrs)) {
                 // Combine the shading results from each proble samples.
                 for (auto i = 0u; i < msgData->probeDepth; i++) {
                     auto &sample = msgData->probeSampleArray[i];
@@ -401,12 +404,18 @@ public:
 
                     result += sample.irradiance / pdf;
                 }
+
+                validSampleCount++;
             }
         }
 
         sg->fi = oldPrimitiveId;
         AiStateSetMsgInt(gRlsRayType, kSssRayUndefined);
 
+        if (validSampleCount == 0.0f)
+            return AI_RGB_BLACK;
+
+        return result * mBaseColor / validSampleCount;
         return result * mBaseColor * AiSamplerGetSampleInvCount(sampleIter);
     }
 
@@ -416,6 +425,66 @@ private:
         if (AiV3Dot(refDir, dir) < 0.0f) {
             dir *= -1.0f;
         }
+    }
+
+    bool    traceProbe(AtShaderGlobals *sg, AtRay &ray, const ShaderData *data, MsgData *msgData)
+    {
+        auto sgOld = *sg;
+
+        int trialCount = kMaxProbeDepth;
+        AtShaderGlobals sgOut;
+
+        while (trialCount > 0 && AiTraceProbe(&ray, &sgOut)) {
+            --trialCount;
+
+            if (sgOut.Op != sg->Op) {
+                continue;
+            }
+
+            auto dist = AiV3Dist(sg->P, sgOut.P);
+            dist = 1.0f;
+            if (dist > AI_EPSILON) {
+                /**sg = sgOut;
+                sg->shader = sgOut.shader;
+                sg->privateinfo = sgOut.privateinfo;*/
+                sg->P = sgOut.P;
+                sg->Po = sgOut.Po;
+
+                sg->N = sgOut.N;
+                sg->Nf = sgOut.Nf;
+                sg->Ng = sgOut.Ng;
+                sg->Ngf = sgOut.Ngf;
+                sg->Ns = sgOut.Ns;
+                sg->Rl = sgOut.Rl;
+                sg->fi = sgOut.fi;
+
+                sg->Rr = sgOut.Rr;
+                sg->Rt = sgOut.Rt;
+                sg->area = sgOut.area;
+                sg->Ro = sgOut.Ro;
+                sg->Rd = sgOut.Rd;
+                sg->bu = sgOut.bu;
+                sg->bv = sgOut.bv;
+                sg->dPdu = sgOut.dPdu;
+                sg->dPdv = sgOut.dPdv;
+                sg->dPdx = sgOut.dPdx;
+                sg->dPdy = sgOut.dPdy;
+                sg->dNdx = sgOut.dNdx;
+                sg->dNdy = sgOut.dNdy;
+                shadeProbeSample(sg, data, msgData);
+            }
+
+            ray.origin = sgOut.P;
+            ray.maxdist = msgData->maxDist;
+            sg->fi = UINT_MAX;
+
+            if (msgData->maxDist <= 0.0f) {
+                break;
+            }
+        }
+
+        *sg = sgOld;
+        return msgData->probeDepth > 0;
     }
 
     //! Perform shading along probe ray.
@@ -442,7 +511,7 @@ private:
         sample.disp = sg->P - msgData->Po;   // the offset from current pos of probe ray to the original shading point
         sample.r = AiV3Length(sample.disp);
         msgData->maxDist -= sg->Rl;
-        //sample.irradiance = AI_RGB_BLACK;
+        sample.irradiance = AI_RGB_BLACK;
 
         if (sample.r > mProfile.maxRadius()) {
             return;
@@ -460,7 +529,7 @@ private:
 
         auto directResult = evalLightSample(sg, sample.r);
         auto indirectResult = integrateDiffuse(sg, data, sample.r);
-        sample.irradiance = directResult + indirectResult;
+        sample.irradiance = (directResult + indirectResult);
         msgData->probeDepth++;
 
         AiStateSetMsgInt(gRlsRayType, kSssProbeRay);
@@ -469,6 +538,7 @@ private:
 
     void    stepProbeRay(AtShaderGlobals *sg, MsgData *msgData)
     {
+        return;
         if (msgData->probeDepth < kMaxProbeDepth && msgData->maxDist > 0.0f) {
             AtRay       ray;
             AtScrSample scrs;
@@ -503,7 +573,7 @@ private:
         //        result += mProfile.evalProfile(r) * L;
         //    }
         //}
-        //AiLightsResetCache(sg);
+        AiLightsResetCache(sg);
 
         return result * mProfile.evalProfile(r);
     }
@@ -516,14 +586,14 @@ private:
 
         AtRGB result = AI_RGB_BLACK;
         AtRay ray;
-        AiMakeRay(&ray, AI_RAY_DIFFUSE, &sg->P, &sg->N, AI_BIG, sg);
+        AiMakeRay(&ray, AI_RAY_DIFFUSE, &sg->P, nullptr, AI_BIG, sg);
 
         AtScrSample scrs;
 
         AtSamplerIterator *sampleIter = data->getDiffuseSamplerIter(sg);
         float samples[2];
         while (AiSamplerGetSample(sampleIter, samples)) {
-            ray.dir = sampleDiffuseDirection(samples[0], samples[1]);
+            ray.dir = sampleDiffuseDirection(samples[0], samples[1], sg->Ns);
 
             if (AiTrace(&ray, &scrs)) {
                 // TODO: Support different diffusion profile interfaces such as directional diffusion.
@@ -544,16 +614,15 @@ private:
         assert(AiIsFinite(r) && r >= 0.0f);
 
         float rmax = mProfile.maxRadius();
+        float phi = AI_PITIMES2 * ry;
 
-        float theta = AI_PITIMES2 * ry;
         AtVector offset;
-        offset.x = cosf(theta) * r;
-        offset.z = sinf(theta) * r;
+        offset.x = cosf(phi) * r;
+        offset.z = sinf(phi) * r;
         offset.y = sqrt(rmax * rmax - r * r);
+        ray.maxdist = offset.y * 2.0f;
 
         // Choose the probe axis from the last two bits.
-        AtVector disp;
-
         FloatInt fi;
         fi.fValue = rx;
         idx = fi.iValue;
@@ -561,27 +630,28 @@ private:
         if ((idx & 0x03) < 2) {
             // Use normal as probe direction
             ray.dir = -mAxisN;
-            disp = mAxisU * offset.x + mAxisV * offset.z - ray.dir * offset.y;
+            AiV3RotateToFrame(offset, mAxisU, -ray.dir, mAxisV);
         } else if ((idx & 0x03) == 2) {
             ray.dir = (idx & 0x04) > 0 ? -mAxisU : mAxisU;
-            disp = mAxisV * offset.x + mAxisN * offset.z - ray.dir * offset.y;
+            AiV3RotateToFrame(offset, mAxisV, -ray.dir, mAxisN);
         } else {
             ray.dir = (idx & 0x04) > 0 ? -mAxisV : mAxisV;
-            disp = mAxisN * offset.x + mAxisU * offset.z - ray.dir * offset.y;
+            AiV3RotateToFrame(offset, mAxisN, -ray.dir, mAxisU);
         }
 
-        ray.origin = origin + disp;
-        ray.maxdist = offset.y * 2.0f;
-
+        ray.origin = origin + offset;
         return r;
     }
 
     //! Sample hemisphere according to cosine-weighted solidangle.
-    AtVector    sampleDiffuseDirection(float rx, float ry) const
+    AtVector    sampleDiffuseDirection(float rx, float ry, const AtVector &normal) const
     {
         AtVector omega = rls::concentricDiskSample(rx, ry);
         omega.z = sqrtf(MAX(0.0f, 1.0f - SQR(omega.x) - SQR(omega.y)));
-        AiV3RotateToFrame(omega, mAxisU, mAxisV, mAxisN);
+
+        AtVector u, v;
+        AiBuildLocalFramePolar(&u, &v, &normal);
+        AiV3RotateToFrame(omega, u, v, normal);
         return omega;
     }
 

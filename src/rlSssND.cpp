@@ -527,10 +527,16 @@ private:
 
         sample.N = sg->Ns;
 
-        auto directResult = evalLightSample(sg, sample.r);
-        auto indirectResult = integrateDiffuse(sg, data, sample.r);
-        sample.irradiance = (directResult + indirectResult);
-        msgData->probeDepth++;
+        // Use cos(theta/2) to approximate the reduce rate of diffusion due to cavity.
+        auto cosCavityAngle = CLAMP(AiV3Dot(sample.N, msgData->No), -1.0f, 1.0f);
+        auto cavityFade = sqrt((1.0f + cosCavityAngle) * 0.5f);
+
+        if (cavityFade > AI_EPSILON) {
+            auto directResult = evalLightSample(sg, sample.r);
+            auto indirectResult = integrateDiffuse(sg, data, sample.r);
+            sample.irradiance = (directResult + indirectResult) * cavityFade;
+            msgData->probeDepth++;
+        }
 
         AiStateSetMsgInt(gRlsRayType, kSssProbeRay);
         stepProbeRay(sg, msgData);

@@ -16,6 +16,8 @@
 
 #include "rlUtil.h"
 
+#define STACKLESS_PROBE_TRACING
+
 AI_SHADER_NODE_EXPORT_METHODS(SssNDMethod);
 
 namespace
@@ -27,13 +29,20 @@ enum   SssParams
     p_distance_multiplier,
     p_scatter_distance,
     p_ior,
+    p_cavity_fadeout,
     p_opacity,
 };
 
-union FloatInt
+union FloatParts
 {
-    float   fValue;
-    unsigned int     iValue;
+    float value;
+
+    struct
+    {
+        unsigned int sign : 1;
+        unsigned int exponent : 8;
+        unsigned int mantissa : 23;
+    } parts;
 };
 
 const char *gRlsRayType = "rls_raytype";
@@ -54,7 +63,7 @@ struct  ShaderData
         AiSamplerDestroy(mSssSampler);
     }
 
-    void    update()
+    void    update(AtNode *node)
     {
         AtNode *options = AiUniverseGetOptions();
 
@@ -68,6 +77,8 @@ struct  ShaderData
         auto sampleNum = AiNodeGetInt(options, "sss_bssrdf_samples");
         AiSamplerDestroy(mSssSampler);
         mSssSampler = AiSampler(sampleNum, 2);
+
+        mUseCavityFade = AiNodeGetBool(node, AtString("cavity_fadeout"));
     }
 
     AtSamplerIterator *getDiffuseSamplerIter(AtShaderGlobals *sg) const
@@ -90,12 +101,18 @@ struct  ShaderData
         return sg->Rr < mMaxRayDepth;
     }
 
+    bool    useCavityFade() const
+    {
+        return mUseCavityFade;
+    }
+
 private:
     AtSampler   *mDiffuseSampler;
     AtSampler   *mSssSampler;
     int         mMaxRayDepth;
     int         mDiffuseDepth;
     int         mSssDepth;
+    bool        mUseCavityFade;
 };
 
 }
@@ -127,13 +144,6 @@ public:
 
     void    setDistance(const AtVector &dist)
     {
-        /*auto ad = dist.x + dist.y + dist.z;
-        auto len = AiV3Length(dist);
-
-        for (auto i = 0; i < 3; i++) {
-            mDistance[i] = (1.0f - dist[i] / ad) * len;
-        }*/
-
         mDistance = dist;
         // Scale the max tracing distance empirically.
         mMaxRadius = MAX(mDistance.x, MAX(mDistance.y, mDistance.z)) * 3.0f;
@@ -266,7 +276,7 @@ private:
 class   SssSampler
 {
 private:
-    static const int kMaxProbeDepth = 16;
+    static const int kMaxProbeDepth = 12;
 
     enum SssRayType
     {
@@ -350,7 +360,6 @@ public:
         }
 
         // Scatter samples around the shading point.
-
         // The traced probe wound not succeessfully return the intersection
         // within the same triangle of current shading point. Change sg->fi
         // to workaround this problem.
@@ -359,17 +368,14 @@ public:
 
         AtRay ray;
         AiMakeRay(&ray, AI_RAY_SUBSURFACE, &sg->P, nullptr, AI_BIG, sg);
-        auto sampleIdx = 0;
         auto result = AI_RGB_BLACK;
 
-        AtScrSample scrs;
         AtSamplerIterator *sampleIter = data->getSssSamplerIter(sg);
         float   samples[2];
-
-        float validSampleCount = 0.0f;
+        int index = 0;
 
         while (AiSamplerGetSample(sampleIter, samples)) {
-            float r = getProbeRay(samples[0], samples[1], sampleIdx++, sg->P, ray);
+            float r = getProbeRay(samples[0], samples[1], sg->P, ray, index++);
 
             AiStateSetMsgInt(gRlsRayType, kSssProbeRay);
             AiStateSetMsgPtr(gRlsSssOrigObj, sg->Op);
@@ -379,44 +385,41 @@ public:
             msgData->Po = sg->P;
             msgData->No = sg->Ns;
 
+#ifdef STACKLESS_PROBE_TRACING
+            traceProbe(sg, ray, data, msgData);
+#else
             // AiTrace would split the shading tree with ray type "kSssProbeRay".
-            if (traceProbe(sg, ray, data, msgData)) {
-            //if (AiTrace(&ray, &scrs)) {
-                // Combine the shading results from each proble samples.
-                for (auto i = 0u; i < msgData->probeDepth; i++) {
-                    auto &sample = msgData->probeSampleArray[i];
+            AtScrSample scrs;
+            AiTrace(&ray, &scrs);
+#endif
+            // Combine the shading results from each proble samples.
+            for (auto i = 0u; i < msgData->probeDepth; i++) {
+                auto &sample = msgData->probeSampleArray[i];
 
-                    if (AiColorIsZero(sample.irradiance)) continue;
+                if (AiColorIsZero(sample.irradiance)) continue;
 
-                    // Apply MIS techniques to compute the combined pdf and geometry terms.
-                    AtVector offset;
-                    AiM4VectorByMatrixMult(&offset, mWorldToLocalMat, &sample.disp);
-                    offset *= offset;   // component-wise multiplication
+                // Apply MIS techniques to compute the combined pdf and geometry terms.
+                AtVector offset;
+                AiM4VectorByMatrixMult(&offset, mWorldToLocalMat, &sample.disp);
+                offset *= offset;   // component-wise multiplication
 
-                    float rr[3];
-                    rr[0] = sqrt(offset[1] + offset[2]);
-                    rr[1] = sqrt(offset[0] + offset[2]);
-                    rr[2] = sqrt(offset[0] + offset[1]);
+                float rr[3];
+                rr[0] = sqrt(offset[1] + offset[2]);
+                rr[1] = sqrt(offset[0] + offset[2]);
+                rr[2] = sqrt(offset[0] + offset[1]);
 
-                    float pdf = mProfile.getPdf(rr[0]) * ABS(AiV3Dot(mAxisU, sample.N)) * 0.25f
-                              + mProfile.getPdf(rr[1]) * ABS(AiV3Dot(mAxisV, sample.N)) * 0.25f
-                              + mProfile.getPdf(rr[2]) * ABS(AiV3Dot(mAxisN, sample.N)) * 0.5f;
+                float pdf = mProfile.getPdf(rr[0]) * ABS(AiV3Dot(mAxisU, sample.N)) * 0.25f
+                            + mProfile.getPdf(rr[1]) * ABS(AiV3Dot(mAxisV, sample.N)) * 0.25f
+                            + mProfile.getPdf(rr[2]) * ABS(AiV3Dot(mAxisN, sample.N)) * 0.5f;
 
-                    result += sample.irradiance / pdf;
-                }
-
-                validSampleCount++;
+                result += sample.irradiance / pdf;
             }
         }
 
         sg->fi = oldPrimitiveId;
         AiStateSetMsgInt(gRlsRayType, kSssRayUndefined);
 
-        if (validSampleCount == 0.0f)
-            return AI_RGB_BLACK;
-
-        return result * mBaseColor / validSampleCount;
-        return result * mBaseColor * AiSamplerGetSampleInvCount(sampleIter);
+        return mBaseColor * result * AiSamplerGetSampleInvCount(sampleIter);
     }
 
 private:
@@ -442,11 +445,7 @@ private:
             }
 
             auto dist = AiV3Dist(sg->P, sgOut.P);
-            dist = 1.0f;
             if (dist > AI_EPSILON) {
-                /**sg = sgOut;
-                sg->shader = sgOut.shader;
-                sg->privateinfo = sgOut.privateinfo;*/
                 sg->P = sgOut.P;
                 sg->Po = sgOut.Po;
 
@@ -524,12 +523,16 @@ private:
         AtVector Nref = sg->N;
         alignDir(Nref, sg->Nf);
         alignDir(Nref, sg->Ngf);
-
         sample.N = sg->Ns;
 
-        // Use cos(theta/2) to approximate the reduce rate of diffusion due to cavity.
-        auto cosCavityAngle = CLAMP(AiV3Dot(sample.N, msgData->No), -1.0f, 1.0f);
-        auto cavityFade = sqrt((1.0f + cosCavityAngle) * 0.5f);
+        auto cavityFade = 1.0f;
+        if (data->useCavityFade()) {
+            // Use cos(theta/2) to approximate the reduce rate of diffusion due to cavity.
+            auto dispDir = sample.disp / sample.r;
+            auto vec = AiV3Dot(msgData->No, dispDir) < 0.0f ? dispDir : msgData->No;
+            auto cosCavityAngle = CLAMP(AiV3Dot(sample.N, vec), -1.0f, 1.0f);
+            cavityFade = sqrt((1.0f + cosCavityAngle) * 0.5f);
+        }
 
         if (cavityFade > AI_EPSILON) {
             auto directResult = evalLightSample(sg, sample.r);
@@ -544,20 +547,20 @@ private:
 
     void    stepProbeRay(AtShaderGlobals *sg, MsgData *msgData)
     {
-        return;
+#ifndef STACKLESS_PROBE_TRACING
         if (msgData->probeDepth < kMaxProbeDepth && msgData->maxDist > 0.0f) {
             AtRay       ray;
             AtScrSample scrs;
             AiMakeRay(&ray, AI_RAY_SUBSURFACE, &sg->P, &sg->Rd, msgData->maxDist, sg);
             AiTrace(&ray, &scrs);
         }
+#endif
     }
 
     //! Evaluate direct lighting.
     AtRGB   evalLightSample(AtShaderGlobals *sg, float r)
     {
         AtRGB result = AI_RGB_BLACK;
-        //sg->fhemi = false;
 
         auto diffuseData = AiOrenNayarMISCreateData(sg, 0.0f);
         AiLightsPrepare(sg);
@@ -573,13 +576,14 @@ private:
         //while (AiLightsGetSample(sg)) {
         //    auto d = AiLightGetDiffuse(sg->Lp);
         //    auto NdotL = CLAMP(ABS(AiV3Dot(sg->Ld, sg->Nf)), 0.0f, 1.0f);
-        //    AtRGB L = AI_ONEOVERPI * sg->Li * sg->we * NdotL * d;
+        //    AtRGB L = AI_ONEOVERPI * sg->Li * sg->we /** NdotL */* d;
         //    if (!AiColorIsZero(L)) {
         //        // TODO: Support multiple components
-        //        result += mProfile.evalProfile(r) * L;
+        //        result += L;
         //    }
+        //    break;
         //}
-        AiLightsResetCache(sg);
+        //AiLightsResetCache(sg);
 
         return result * mProfile.evalProfile(r);
     }
@@ -595,11 +599,11 @@ private:
         AiMakeRay(&ray, AI_RAY_DIFFUSE, &sg->P, nullptr, AI_BIG, sg);
 
         AtScrSample scrs;
-
         AtSamplerIterator *sampleIter = data->getDiffuseSamplerIter(sg);
         float samples[2];
+
         while (AiSamplerGetSample(sampleIter, samples)) {
-            ray.dir = sampleDiffuseDirection(samples[0], samples[1], sg->Ns);
+            ray.dir = sampleDiffuseDirection(samples[0], samples[1], sg->Nf);
 
             if (AiTrace(&ray, &scrs)) {
                 // TODO: Support different diffusion profile interfaces such as directional diffusion.
@@ -614,8 +618,19 @@ private:
 
     //! Return the probe ray to find intersection near x_0.
     //! Based on BSSRDF importance sampling by Arnold.
-    float   getProbeRay(float rx, float ry, int idx, const AtVector &origin, AtRay &ray) const
+    float   getProbeRay(float rx, float ry, const AtVector &origin, AtRay &ray, int idx) const
     {
+        if (rx < 0.5f) {
+            idx = 0;
+            rx = LINEARSTEP(0.0f, 0.5f, rx);
+        } else if (rx < 0.75f) {
+            idx = 2;
+            rx = LINEARSTEP(0.5f, 0.75f, rx);
+        } else {
+            idx = 3;
+            rx = LINEARSTEP(0.75f, 1.0f, rx);
+        }
+
         float r = mProfile.getRadius(rx);
         assert(AiIsFinite(r) && r >= 0.0f);
 
@@ -628,10 +643,10 @@ private:
         offset.y = sqrt(rmax * rmax - r * r);
         ray.maxdist = offset.y * 2.0f;
 
-        // Choose the probe axis from the last two bits.
-        FloatInt fi;
-        fi.fValue = rx;
-        idx = fi.iValue;
+        // Choose the probe axis from the last two bits of mantissa
+        /*FloatParts fi;
+        fi.value = rx;
+        idx = fi.parts.mantissa;*/
 
         if ((idx & 0x03) < 2) {
             // Use normal as probe direction
@@ -676,6 +691,8 @@ private:
 node_parameters
 {
     AiParameterRGB("color", 1.0f, 1.0f, 1.0f);
+    AiMetaDataSetBool(mds, "color", "always_linear", true);
+
     AiParameterFLT("distance_multiplier", 1.0f);
     AiMetaDataSetFlt(mds, "distance_multiplier", "min", 0.0f);
     AiMetaDataSetFlt(mds, "distance_multiplier", "softmax", 5.0f);
@@ -683,6 +700,9 @@ node_parameters
 
     AiParameterFLT("ior", 1.0f);
     AiMetaDataSetFlt(mds, "ior", "min", 0.0f);
+
+    AiParameterBool("cavity_fadeout", true);
+    AiMetaDataSetBool(mds, "cavity_fadeout", "linkable", false);
 
     AiParameterRGB("opacity", 1.0f, 1.0f, 1.0f);
 }
@@ -697,7 +717,7 @@ node_update
 {
     ShaderData *data = static_cast<ShaderData*>(AiNodeGetLocalData(node));
     if (data) {
-        data->update();
+        data->update(node);
     }
 }
 

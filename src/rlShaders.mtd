@@ -9,3 +9,9 @@
     maya.name               STRING      "rlDisney"
     maya.classification     STRING      "shader/surface"
     maya.id                 INT         0x04700002
+
+[node rlSssND]
+    desc                    STRING      ""
+    maya.name               STRING      "rlSssND"
+    maya.classification     STRING      "shader/surface"
+    maya.id                 INT         0x04700004

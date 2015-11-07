@@ -14,12 +14,16 @@
     <ClCompile Include="..\src\ext\tinyexr.cc" />
     <ClCompile Include="..\src\rlDisney.cpp" />
     <ClCompile Include="..\src\rlGgx.cpp" />
+    <ClCompile Include="..\src\rlSkin.cpp" />
+    <ClCompile Include="..\src\rlSss.cpp" />
     <ClCompile Include="..\src\rlSssND.cpp" />
     <ClCompile Include="..\src\rlUtil.cpp" />
     <ClCompile Include="..\src\_PluginMain.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\src\ext\tinyexr.h" />
+    <ClInclude Include="..\src\rlGgx.h" />
+    <ClInclude Include="..\src\rlSss.h" />
     <ClInclude Include="..\src\rlUtil.h" />
   </ItemGroup>
   <PropertyGroup Label="Globals">

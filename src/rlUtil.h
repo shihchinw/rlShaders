@@ -22,6 +22,11 @@ inline AtVector sphericalDirection(float cosTheta, float phi)
     return omega;
 }
 
+inline float colorToLuminance(const AtRGB &col)
+{
+    return col.r * 0.212671f + col.g * 0.715160f + col.b * 0.072169f;
+}
+
 AtVector   concentricDiskSample(float rx, float ry);
 
 //! Image writer for sampling pattern.

@@ -36,6 +36,12 @@
     <ClCompile Include="..\src\rlUtil.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="..\src\rlSkin.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\rlSss.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\src\rlUtil.h">
@@ -43,6 +49,12 @@
     </ClInclude>
     <ClInclude Include="..\src\ext\tinyexr.h">
       <Filter>Common</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\rlSss.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\rlGgx.h">
+      <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
 </Project>

@@ -15,3 +15,32 @@
     maya.name               STRING      "rlSssND"
     maya.classification     STRING      "shader/surface"
     maya.id                 INT         0x04700004
+
+[node rlSkin]
+    desc                    STRING      ""
+    maya.name               STRING      "rlSkin"
+    maya.classification     STRING      "shader/surface"
+    maya.id                 INT         0x04700005
+
+    [attr sss_weight]
+        min                 FLOAT   0.0
+        softmax             FLOAT   1.0
+    [attr sss_dist_multiplier]
+        min                 FLOAT   0.0
+        softmax             FLOAT   3.0
+    [attr specular_weight]
+        min                 FLOAT   0.0
+        softmax             FLOAT   1.0
+    [attr specular_roughness]
+        min                 FLOAT   0.0
+        softmax             FLOAT   1.0
+    [attr specular_ior]
+        min                 FLOAT   0.0
+    [attr sheen_weight]
+        min                 FLOAT   0.0
+        softmax             FLOAT   1.0
+    [attr sheen_roughness]
+        min                 FLOAT   0.0
+        max                 FLOAT   1.0
+    [attr sheen_ior]
+        min                 FLOAT   0.0

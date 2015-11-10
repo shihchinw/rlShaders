@@ -12,6 +12,11 @@
 namespace rls
 {
 
+struct  CoordBasis
+{
+    AtVector    U, V, N;
+};
+
 inline AtVector sphericalDirection(float cosTheta, float phi)
 {
     AtVector omega;
@@ -20,6 +25,11 @@ inline AtVector sphericalDirection(float cosTheta, float phi)
     omega.x = r * cosf(phi);
     omega.y = r * sinf(phi);
     return omega;
+}
+
+inline AtVector reflectDirection(const AtVector &i, const AtVector &n)
+{
+    return 2.0f * ABS(AiV3Dot(i, n)) * n - i;
 }
 
 inline float colorToLuminance(const AtRGB &col)

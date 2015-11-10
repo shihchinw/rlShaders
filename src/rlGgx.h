@@ -1,24 +1,102 @@
-// Microfacet BSDF based on
-// Microfacet Models for Refraction through Rough Surfaces. Bruce Walter et al. EGSR'07
-// http://www.cs.cornell.edu/~srm/publications/EGSR07-btdf.html
+// GGX BRDF/BSDF based on
+// [1]  Microfacet Models for Refraction through Rough Surfaces. Bruce Walter et al. EGSR'07
+//      http://www.cs.cornell.edu/~srm/publications/EGSR07-btdf.html
+// [2]  Physically Based Shading at Disney. Brent Burley. SIGGRAPH 2012 course notes.
+//      http://blog.selfshadow.com/publications/s2012-shading-course/
+// [3] 	Importance Sampling Microfacet-Based BSDFs using the Distribution of Visible Normals.
+//      Eric Heitz and Eugene d'Eon. EGSR'14
+//      https://hal.inria.fr/hal-00996995/en
+//      https://hal.inria.fr/hal-00996995v2/file/supplemental1.pdf
 #ifndef RLS_GGX_H
 #define RLS_GGX_H
 
 #include <algorithm>
+#include <memory>
 #include <ai.h>
+
+#include "rlUtil.h"
 
 namespace rls
 {
 
-class   GgxSampler
+class   NDFKernel
+{
+public:
+    NDFKernel(const AtVector &v, float ax, float ay, const CoordBasis &frame)
+        : mBasis(frame), mViewDir(v), mAlphaX(ax), mAlphaY(ay)
+    {
+    }
+
+    //! Sample the normal vector of microfacet. [2] Eq.14 p.26
+    AtVector    evalSample(float rx, float ry) const
+    {
+        auto g = sqrtf(rx / (1.0f - rx));
+        float phi = AI_PITIMES2 * ry;
+        AtVector omega;
+        AiV3Create(omega, g * mAlphaX * cosf(phi), g * mAlphaY * sinf(phi), 1.0f);
+        AiV3RotateToFrame(omega, mBasis.U, mBasis.V, mBasis.N);
+        return AiV3Normalize(omega);
+    }
+
+    //! The PDF for GGX reflection.  [1] Eq.38
+    template <typename Sampler>
+    float   evalPdf(const Sampler *ggxSampler, const AtVector &i, const AtVector &m)
+    {
+        auto IdotM = ABS(AiV3Dot(i, m));
+        auto MdotN = ABS(AiV3Dot(m, mBasis.N));
+        return ggxSampler->D(m, mBasis.N) * MdotN * 0.25f / IdotM;
+    }
+
+protected:
+    const CoordBasis    &mBasis;
+    AtVector            mViewDir;
+    float               mAlphaX, mAlphaY;
+};
+
+//! The sampling mechanism with the visible normal distribution fuction. [3]
+class   VNDFKernel
+{
+public:
+    VNDFKernel(const AtVector &v, float ax, float ay, const CoordBasis &frame)
+        : mBasis(frame), mViewDir(v), mAlphaX(ax), mAlphaY(ay)
+    {
+    }
+
+    //! Sample the normal vector of microfacet.
+    AtVector    evalSample(float rx, float ry) const;
+
+    //! Return PDF with given incoming direction and microfacet normal.
+    template <typename Sampler>
+    float   evalPdf(const Sampler *ggxSampler, const AtVector &i, const AtVector &m)
+    {
+        const auto &N = mBasis.N;
+        auto IdotM = ABS(AiV3Dot(i, m));
+        auto MdotN = ABS(AiV3Dot(m, N));
+        auto IdotN = ABS(AiV3Dot(i, N));
+        auto pdf = ggxSampler->D(m, N) * ggxSampler->G1(i, m, N) / IdotN * 0.25f;
+        return MAX(pdf, AI_EPSILON);
+    }
+
+private:
+    AtVector2   sampleSlope(float theta, float rx, float ry) const;
+
+private:
+    const CoordBasis    &mBasis;
+    AtVector            mViewDir;
+    float               mAlphaX, mAlphaY;
+};
+
+
+template <typename NDSampler>
+class   GgxSamplerT
 {
 public:
     //! Return sample direction
     static AtVector evalSample(const void *brdfData, float rx, float ry)
     {
-        auto *brdf = static_cast<const GgxSampler*>(brdfData);
-        auto M = brdf->sampleMicrofacetNormal(rx, ry);
-        return brdf->getReflectDirection(brdf->mViewDir, M);
+        auto brdf = static_cast<const GgxSamplerT *>(brdfData);
+        auto M = brdf->mNormalSampler->evalSample(rx, ry);
+        return rls::reflectDirection(brdf->mViewDir, M);
     }
 
     //! Return the reflectance
@@ -29,21 +107,23 @@ public:
             return AI_RGB_BLACK;
         }
 
-        auto *brdf = static_cast<const GgxSampler*>(brdfData);
+        auto brdf = static_cast<const GgxSamplerT *>(brdfData);
         return brdf->evalReflectance(*indir);
     }
 
     static float evalPdf(const void *brdfData, const AtVector *indir)
     {
-        auto *brdf = static_cast<const GgxSampler*>(brdfData);
+        auto brdf = static_cast<const GgxSamplerT *>(brdfData);
         auto V = brdf->mViewDir;
         auto H = AiV3Normalize(V + *indir);
-        return brdf->getReflectPdf(V, H);
+        return brdf->mNormalSampler->evalPdf(brdf, V, H);
     }
 
 public:
-    GgxSampler(AtShaderGlobals *sg, const AtColor &specColor, float ior, float roughness)
+    GgxSamplerT(AtShaderGlobals *sg, const AtColor &specColor,
+               float ior, float roughness, float anisotropic = 0.0f)
         : mSpecularColor(specColor)
+        , mNormalSampler(nullptr)
     {
         bool isEntering = AiV3Dot(sg->N, sg->Rd) < AI_EPSILON;
         mIorIn = 1.0f;
@@ -53,8 +133,14 @@ public:
         }
 
         mViewDir = -sg->Rd;
-        mAxisN = sg->Nf;
-        AiBuildLocalFramePolar(&mAxisU, &mAxisV, &mAxisN);
+        mBasis.N = mAxisN = sg->Nf;
+        AiBuildLocalFramePolar(&mBasis.U, &mBasis.V, &mBasis.N);
+
+        auto aspect = sqrt(1.0f - anisotropic * 0.9f);
+        mAlphaX = MAX(1e-4f, SQR(roughness) / aspect);
+        mAlphaY = MAX(1e-4f, SQR(roughness) * aspect);
+
+        mNormalSampler = std::make_shared<NDSampler>(mViewDir, mAlphaX, mAlphaY, mBasis);
 
         // Remap the roughness value to approximate the highlight range in aiStandard.
         mRoughness = MAX(1e-5f, SQR(roughness));
@@ -83,23 +169,23 @@ public:
         return AiBRDFIntegrate(sg, this, evalSample, evalBrdf, evalPdf, AI_RAY_GLOSSY);
     }
 
-    template <typename ShaderData>
-    AtColor     traceShadow(AtShaderGlobals *sg, const ShaderData *data)
-    {
-        AtScrSample scrs;
+    //template <typename ShaderData>
+    //AtColor     traceShadow(AtShaderGlobals *sg, const ShaderData *data)
+    //{
+    //    AtScrSample scrs;
 
-        AtRay ray;
-        AiMakeRay(&ray, AI_RAY_REFRACTED, &sg->P, &sg->Nf, AI_BIG, sg);
-        AiRefractRay(&ray, &sg->Nf, mIorIn, mIorOut, sg);
+    //    AtRay ray;
+    //    AiMakeRay(&ray, AI_RAY_REFRACTED, &sg->P, &sg->Nf, AI_BIG, sg);
+    //    AiRefractRay(&ray, &sg->Nf, mIorIn, mIorOut, sg);
 
-        if (!data->shouldTraceRefract(sg) || !AiTrace(&ray, &scrs)) {
-            // Sample environment? Or use exit color
-            AiTraceBackground(&ray, &scrs);
-            return scrs.color;
-        }
+    //    if (!data->shouldTraceRefract(sg) || !AiTrace(&ray, &scrs)) {
+    //        // Sample environment? Or use exit color
+    //        AiTraceBackground(&ray, &scrs);
+    //        return scrs.color;
+    //    }
 
-        return scrs.color;
-    }
+    //    return scrs.color;
+    //}
 
     //! Sample indirect radiance.
     template <typename ShaderData>
@@ -126,7 +212,7 @@ public:
         AtColor result = AI_RGB_BLACK;
 
         while (AiSamplerGetSample(sampleIter, samples)) {
-            AtVector m = sampleMicrofacetNormal(samples[0], samples[1]);
+            AtVector m = mNormalSampler->evalSample(samples[0], samples[1]);
             bool isRefracted = AiRefractRay(&ray, &m, mIorIn, mIorOut, sg);
 
             if (!isRefracted) {
@@ -145,7 +231,7 @@ public:
         return result * AiSamplerGetSampleInvCount(sampleIter);
     }
 
-    //! Fresnel for dielectrics with unpolarized light. (Eq.22)
+    //! Fresnel for dielectrics with unpolarized light. [1] Eq.22
     float   fresnel(const AtVector &i, const AtVector &m) const
     {
         auto eta = mIorOut / mIorIn;
@@ -174,29 +260,6 @@ public:
         return G1(i, m, n) * G1(o, m, n);
     }
 
-private:
-    //! Generate the normal of microfacet according to GGX distribution.
-    AtVector    sampleMicrofacetNormal(float rx, float ry) const
-    {
-        auto thetaM = atanf(mRoughness * sqrtf(rx / (1.0f - rx)));
-        auto phiM = AI_PITIMES2 * ry;
-
-        AtVector omega;
-
-        omega.z = cosf(thetaM);
-        float r = sqrtf(1.0f - SQR(omega.z));
-        omega.x = r * cosf(phiM);
-        omega.y = r * sinf(phiM);
-
-        AiV3RotateToFrame(omega, mAxisU, mAxisV, mAxisN);
-        return omega;
-    }
-
-    AtVector    getReflectDirection(const AtVector &i, const AtVector &m) const
-    {
-        return 2.0f * ABS(AiV3Dot(i, m)) * m - i;
-    }
-
     bool    getRefractDirection(const AtVector &m, const AtVector &i, AtVector &dir) const
     {
         int  sign = SGN(AiV3Dot(i, mAxisN));
@@ -213,15 +276,7 @@ private:
         return true;
     }
 
-    //! The PDF of reflection. eq(38)
-    float   getReflectPdf(const AtVector &i, const AtVector &m) const
-    {
-        auto IdotM = ABS(AiV3Dot(i, m));
-        auto MdotN = ABS(AiV3Dot(m, mAxisN));
-        return D(m, mAxisN) * MdotN * 0.25f / IdotM;
-    }
-
-    //! Return the sample weight for importance sampling of BSDF. (Eq.41)
+    //! Return the sample weight for importance sampling of BSDF. [1] Eq.41
     float   getSampleWeight(const AtVector &i, const AtVector &o, const AtVector &m) const
     {
         auto IdotH = (AiV3Dot(i, m));
@@ -231,7 +286,7 @@ private:
         return G(i, o, m, mAxisN) * ABS(IdotH / (IdotN * MdotN));
     }
 
-    //! The reflection term. (Eq.20)
+    //! The reflection term. [1] Eq.20
     float   reflection(const AtVector &i, const AtVector &o, const AtVector &n) const
     {
         auto hr = static_cast<float>(SGN(AiV3Dot(i, n))) * AiV3Normalize(o + i);
@@ -243,7 +298,7 @@ private:
         return reflectWeight * G(i, o, hr, n) * D(hr, n) * 0.25f / (LdotN * VdotN);
     }
 
-    //! The refraction term. (Eq.21)
+    //! The refraction term. [1] Eq.21
     float   refraction(const AtVector &i, const AtVector &o, const AtVector &n) const
     {
         auto ht = -AiV3Normalize(mIorIn * i + mIorOut * o);
@@ -258,23 +313,19 @@ private:
         return ABS(OdotH * IdotH) * SQR(mIorOut) * refractWeight * G(i, o, ht, n) * D(ht, n) / denominator;
     }
 
-    //! The normal distribution with GGX formula. (Eq.33)
+    //! The anisotropic normal distribution with GGX formula. [2] Eq.13, p.25
+    //! @note The isotropic version can be referred to [1] Eq.33
     float   D(const AtVector &m, const AtVector &n) const
     {
-        float MdotN = AiV3Dot(m, n);
+        float MdotU = AiV3Dot(m, mBasis.U);
+        float MdotV = AiV3Dot(m, mBasis.V);
+        float MdotN2 = SQR(AiV3Dot(mAxisN, m));
 
-        if (MdotN < 0.0f) {
-            return 0.0f;
-        }
-
-        float roughnessSqr = SQR(mRoughness);
-        float cosSqr = SQR(MdotN);
-        float tanSqr = 1.0f / cosSqr - 1.0f;
-        float denominator = AI_PI * SQR(cosSqr) * SQR(roughnessSqr + tanSqr);
-        return roughnessSqr / denominator;
+        float denominator = mAlphaX * mAlphaY * SQR(SQR(MdotU / mAlphaX) + SQR(MdotV / mAlphaY) + MdotN2);
+        return AI_ONEOVERPI / denominator;
     }
 
-    //! The shadowing/masking term. (Eq.34)
+    //! The shadowing/masking term. [1] Eq.34
     float   G1(const AtVector &v, const AtVector &m, const AtVector &n) const
     {
         float VdotM = AiV3Dot(v, m);
@@ -292,13 +343,19 @@ private:
     }
 
 private:
+    std::shared_ptr<NDSampler>    mNormalSampler;
+
+    CoordBasis  mBasis;
     AtColor     mSpecularColor;
     AtVector    mViewDir;
-    AtVector    mAxisU, mAxisV, mAxisN;
+    AtVector    mAxisN;
 
     float       mRoughness;
+    float       mAlphaX, mAlphaY;
     float       mIorIn, mIorOut;
 };
+
+using GgxSampler = GgxSamplerT<VNDFKernel>;
 
 } // Namespace of rls
 #endif

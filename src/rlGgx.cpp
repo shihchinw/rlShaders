@@ -8,6 +8,100 @@
 
 AI_SHADER_NODE_EXPORT_METHODS(GgxMethod);
 
+//-----------------------------------------------------------------------------
+
+AtVector2   rls::VNDFKernel::sampleSlope(float theta, float rx, float ry) const
+{
+    AtVector2 slope;
+
+    auto uniformSample = [](float rx, float ry) {
+        AtVector2 slope;
+        float r = sqrtf(rx / (1.0f - rx));
+        float phi = AI_PITIMES2 * ry;
+        slope.x = r * cosf(phi);
+        slope.y = r * sinf(phi);
+        return slope;
+    };
+
+    if (theta < AI_EPSILON) {
+        return uniformSample(rx, ry);
+    }
+
+    float B = tanf(theta);
+    float B2 = SQR(B);
+    float G1 = 2.0f / (1.0f + sqrtf(1.0f + B2));
+
+    // sample slope_x
+    float A = 2.0f * rx / G1 - 1.0f;
+    float A2 = SQR(A);
+    if (ABS(A2 - 1.0f) < AI_EPSILON) {
+        return uniformSample(rx, ry);
+    }
+
+    float tmp = 1.0f / (A2 - 1.0f);
+    float D = sqrtf(MAX(0.0f, B2 * SQR(tmp) - (A2 - B2) * tmp));
+    float slopeX1 = B * tmp - D;
+    float slopeX2 = B * tmp + D;
+    slope.x = (A < 0.0f || slopeX2 > 1.0f / B) ? slopeX1 : slopeX2;
+
+    // sample slope_y
+    float sign = 1.0f;
+    if (ry > 0.5f) {
+        ry = 2.0f * (ry - 0.5f);
+    } else {
+        sign = -1.0f;
+        ry = 2.0f * (0.5f - ry);
+    }
+
+    float z = (ry *(ry *(ry * 0.27385f - 0.73369f) + 0.46341f))
+        / (ry *(ry *(ry * 0.093073f + 0.309420f) - 1.0f) + 0.597999f);
+    slope.y = sign * z * sqrtf(1.0f + SQR(slope.x));
+    return slope;
+}
+
+AtVector rls::VNDFKernel::evalSample(float rx, float ry) const
+{
+    auto V = mViewDir;
+
+    // Transform to local frame
+    float cosThetaV = CLAMP(AiV3Dot(mBasis.N, V), -1.0f, 1.0f);
+    //assert(cosThetaV >= 0.0f);
+
+    float phiV = atan2f(AiV3Dot(mBasis.V, V), AiV3Dot(mBasis.U, V));
+    V = sphericalDirection(cosThetaV, phiV);
+
+    // Stretch view direction
+    V.x *= mAlphaX;
+    V.y *= mAlphaY;
+    V = AiV3Normalize(V);
+
+    float theta = 0.0f;
+    float phi = 0.0f;
+
+    if (V.z < (1.0f - AI_EPSILON)) {
+        theta = acosf(V.z);
+        phi = atan2f(V.y, V.x);
+    }
+
+    auto slope = sampleSlope(theta, rx, ry);
+
+    // Rotate & unstretch
+    float cosPhi = cosf(phi);
+    float sinPhi = sinf(phi);
+    AtVector omega;
+    omega.x = -(cosPhi * slope.x - sinPhi * slope.y) * mAlphaX;
+    omega.y = -(sinPhi * slope.x + cosPhi * slope.y) * mAlphaY;
+    omega.z = 1.0f;
+
+    AiV3RotateToFrame(omega, mBasis.U, mBasis.V, mBasis.N);
+    return AiV3Normalize(omega);
+}
+
+//-----------------------------------------------------------------------------
+
+namespace
+{
+
 enum    GgxParams
 {
     p_Kd_color,
@@ -18,11 +112,9 @@ enum    GgxParams
     p_Kt,
     p_ior,
     p_roughness,
+    p_anisotropic,
     p_opacity,
 };
-
-namespace
-{
 
 struct  ShaderData
 {
@@ -90,12 +182,30 @@ node_parameters
     AiParameterFLT("roughness", 0.0f);
     AiMetaDataSetFlt(mds, "roughness", "min", 0.0f);
     AiMetaDataSetFlt(mds, "roughness", "max", 1.0f);
+    AiParameterFLT("anisotropic", 0.0f);
 
     AiParameterRGB("opacity", 1.0f, 1.0f, 1.0f);
 }
 
 node_initialize
 {
+    // Dump samples
+    //auto sg = AiShaderGlobals();
+    //sg->Rd = -rls::sphericalDirection(cosf(AI_PIOVER2 * 0.95f), AI_PIOVER2 * 0.0f);
+    ////sg->Rd = -rls::sphericalDirection(cosf(AI_PIOVER2 * 0.5f), AI_PIOVER2 * 0.0f);
+    //AiV3Create(sg->Nf, 0.0f, 0.0f, 1.0f);
+
+    //auto specColor = AiShaderEvalParamRGB(p_Ks_color);
+    //auto ior = AiShaderEvalParamFlt(p_ior);
+    //auto roughness = AiShaderEvalParamFlt(p_roughness);
+    //auto anisotropic = AiShaderEvalParamFlt(p_anisotropic);
+
+    //rls::GgxSampler brdf(sg, specColor, ior, roughness, anisotropic);
+    //rls::SampleWriter samplerWiter(512, 256);
+
+    //samplerWiter.writeRadiance(sg, brdf);
+    //samplerWiter.writeSample(sg, brdf, 50);
+
     ShaderData *data = new ShaderData;
     AiNodeSetLocalData(node, data);
 }
@@ -129,8 +239,9 @@ shader_evaluate
     auto specColor = AiShaderEvalParamRGB(p_Ks_color);
     auto ior = AiShaderEvalParamFlt(p_ior);
     auto roughness = AiShaderEvalParamFlt(p_roughness);
+    auto anisotropic = AiShaderEvalParamFlt(p_anisotropic);
 
-    rls::GgxSampler sampler(sg, specColor, ior, roughness);
+    rls::GgxSampler sampler(sg, specColor, ior, roughness, anisotropic);
     ShaderData *data = static_cast<ShaderData *>(AiNodeGetLocalData(node));
 
     if (sg->Rt & AI_RAY_SHADOW) {

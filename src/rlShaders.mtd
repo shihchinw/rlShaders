@@ -4,6 +4,27 @@
     maya.classification     STRING      "shader/surface"
     maya.id                 INT         0x04700001
 
+    [attr Kd]
+        min                 FLOAT   0.0
+        softmax             FLOAT   1.0
+    [attr Ks]
+        min                 FLOAT   0.0
+        softmax             FLOAT   1.0
+    [attr Kt]
+        min                 FLOAT   0.0
+        softmax             FLOAT   1.0
+    [attr ior]
+        min                 FLOAT   0.0
+    [attr roughness]
+        min                 FLOAT   0.0
+        softmax             FLOAT   1.0
+    [attr anisotropic]
+        min                 FLOAT   0.0
+        softmax             FLOAT   1.0
+    [attr opacity]
+        min                 FLOAT   0.0
+        max                 FLOAT   1.0
+
 [node rlDisney]
     desc                    STRING      ""
     maya.name               STRING      "rlDisney"

@@ -1,7 +1,6 @@
 import pymel.core as pm
-import mtoa.utils as utils
-import mtoa.ui.ae.utils as aeUtils
 from mtoa.ui.ae.shaderTemplate import ShaderAETemplate
+
 
 class AErlGgxTemplate(ShaderAETemplate):
 
@@ -15,27 +14,34 @@ class AErlGgxTemplate(ShaderAETemplate):
 
         # Begins a "Color Section"
         self.beginLayout("Common Attributes", collapse=False)
-        self.addControl("roughness");
-        self.addControl("ior", label="IOR");
-        self.addControl("opacity");
+        self.addControl("roughness")
+        self.addControl("anisotropic")
+        self.addControl("ior", label="IOR")
         self.endLayout()
 
         self.beginLayout("Diffuse", collapse=False)
-        self.addControl("KdColor", label="Color");
-        self.addControl("Kd", label="Weight");
+        self.addControl("KdColor", label="Color")
+        self.addControl("Kd", label="Weight")
         self.endLayout()
 
         self.beginLayout("Specular", collapse=False)
-        self.addControl("KsColor", label="Color");
-        self.addControl("Ks", label="Weight");
+        self.addControl("KsColor", label="Color")
+        self.addControl("Ks", label="Weight")
         self.endLayout()
 
         self.beginLayout("Refract", collapse=False)
-        self.addControl("KtColor", label="Color");
-        self.addControl("Kt", label="Weight");
+        self.addControl("KtColor", label="Color")
+        self.addControl("Kt", label="Weight")
+        self.endLayout()
+
+        self.beginLayout("Opacity", collapse=True)
+        self.addControl("opacity", label="Weight")
+        self.addControl("opacity_color", label="Color")
         self.endLayout()
 
         self.addBumpLayout()
+        self.addAOVLayout(aovReorder=["direct_diffuse", "direct_specular",
+            "refraction", "indirect_diffuse", "indirect_specular"])
 
         # include/call base class/node attributes
         pm.mel.AEdependNodeTemplate(self.nodeName)

@@ -1,6 +1,3 @@
-// Microfacet BSDF based on
-// Microfacet Models for Refraction through Rough Surfaces. Bruce Walter et al. EGSR'07
-// http://www.cs.cornell.edu/~srm/publications/EGSR07-btdf.html
 #include <algorithm>
 #include <ai.h>
 
@@ -114,6 +111,13 @@ enum    GgxParams
     p_roughness,
     p_anisotropic,
     p_opacity,
+    p_opacity_color,
+
+    p_aov_direct_diffuse,
+    p_aov_direct_specular,
+    p_aov_refract,
+    p_aov_indirect_diffuse,
+    p_aov_indirect_specular,
 };
 
 struct  ShaderData
@@ -162,29 +166,30 @@ node_parameters
 {
     AiParameterRGB("KdColor", 1.0f, 1.0f, 1.0f);
     AiParameterFLT("Kd", 0.5f);
-    AiMetaDataSetFlt(mds, "Kd", "min", 0.0f);
-    AiMetaDataSetFlt(mds, "Kd", "max", 1.0f);
 
     AiParameterRGB("KsColor", 1.0f, 1.0f, 1.0f);
     AiParameterFLT("Ks", 0.5f);
-    AiMetaDataSetFlt(mds, "Ks", "min", 0.0f);
-    AiMetaDataSetFlt(mds, "Ks", "max", 1.0f);
 
     AiParameterRGB("KtColor", 1.0f, 1.0f, 1.0f);
     AiParameterFLT("Kt", 0.0f);
-    AiMetaDataSetFlt(mds, "Kt", "min", 0.0f);
-    AiMetaDataSetFlt(mds, "Kt", "max", 1.0f);
-
-
     AiParameterFLT("ior", 1.0f);
-    AiMetaDataSetFlt(mds, "ior", "min", 0.0f);
 
     AiParameterFLT("roughness", 0.0f);
-    AiMetaDataSetFlt(mds, "roughness", "min", 0.0f);
-    AiMetaDataSetFlt(mds, "roughness", "max", 1.0f);
     AiParameterFLT("anisotropic", 0.0f);
 
-    AiParameterRGB("opacity", 1.0f, 1.0f, 1.0f);
+    AiParameterFLT("opacity", 1.0f);
+    AiParameterRGB("opacity_color", 1.0f, 1.0f, 1.0f);
+
+    AiParameterSTR("aov_direct_diffuse", "direct_diffuse");
+    AiMetaDataSetInt(mds, "aov_direct_diffuse", "aov.type", AI_TYPE_RGB);
+    AiParameterSTR("aov_direct_specular", "direct_specular");
+    AiMetaDataSetInt(mds, "aov_direct_specular", "aov.type", AI_TYPE_RGB);
+    AiParameterSTR("aov_refract", "refraction");
+    AiMetaDataSetInt(mds, "aov_refract", "aov.type", AI_TYPE_RGB);
+    AiParameterSTR("aov_indirect_diffuse", "indirect_diffuse");
+    AiMetaDataSetInt(mds, "aov_indirect_diffuse", "aov.type", AI_TYPE_RGB);
+    AiParameterSTR("aov_indirect_specular", "indirect_specular");
+    AiMetaDataSetInt(mds, "aov_indirect_specular", "aov.type", AI_TYPE_RGB);
 }
 
 node_initialize
@@ -230,7 +235,7 @@ node_finish
 
 shader_evaluate
 {
-    AtRGB opacity = AiShaderEvalParamFlt(p_opacity) * AI_RGB_WHITE;
+    AtRGB opacity = AiShaderEvalParamFlt(p_opacity) * AiShaderEvalParamRGB(p_opacity_color);
 
     if (AiShaderGlobalsApplyOpacity(sg, opacity)) {
         return;
@@ -259,7 +264,7 @@ shader_evaluate
 
     auto diffuseWeight = AiShaderEvalParamFlt(p_Kd);
     auto diffuseColor = AiShaderEvalParamRGB(p_Kd_color) * diffuseWeight;
-    bool sampleDiffuse = !AiColorIsSmall(diffuseColor) && sg->Rr_diff < maxDiffuseDepth;
+    bool sampleDiffuse = !AiColorIsSmall(diffuseColor) && sg->Rr_diff <= maxDiffuseDepth;
 
     AtColor diffuse = AI_RGB_BLACK;
     AtColor specular = AI_RGB_BLACK;
@@ -271,28 +276,34 @@ shader_evaluate
                             AiOrenNayarMISSample, AiOrenNayarMISBRDF, AiOrenNayarMISPDF);
         }
 
-        if (AiLightGetAffectSpecular(sg->Lp) && sg->Rr_gloss < maxGlossyDepth) {
-            //specular += sampler.evalBrdf(&sampler, &sg->Ld) * sg->Li * sg->we;
+        if (AiLightGetAffectSpecular(sg->Lp) && sg->Rr_gloss <= maxGlossyDepth) {
             specular += sampler.evalLightSample(sg);
         }
     }
 
     auto specularWeight = AiShaderEvalParamFlt(p_Ks);
+    diffuse *= diffuseColor;
+    specular *= specularWeight;
 
     auto transmissionWeight = AiShaderEvalParamFlt(p_Kt);
     auto ktColor = AiShaderEvalParamRGB(p_Kt_Color) * transmissionWeight;
     AtColor transmission = AiColorIsSmall(ktColor) ? AI_RGB_BLACK : sampler.integrateRefract(sg, data) * ktColor;
 
-    AtColor result = diffuseColor * diffuse + specularWeight * specular + transmission;
+    AtColor result = diffuse + specular + transmission;
 
-    if (sg->Rr > 0) {
-        sg->out.RGB = result;
-        return;
+    if (sg->Rt & AI_RAY_CAMERA) {
+        AiAOVSetRGB(sg, AiShaderEvalParamStr(p_aov_direct_diffuse), diffuse);
+        AiAOVSetRGB(sg, AiShaderEvalParamStr(p_aov_direct_specular), specular);
+        AiAOVSetRGB(sg, AiShaderEvalParamStr(p_aov_refract), transmission);
+
+        auto indirectDiffuse = sampleDiffuse ? AiOrenNayarIntegrate(&sg->Nf, sg, roughness) : AI_RGB_BLACK;
+        auto indirectGlossy = sampler.integrateGlossy(sg) * specularWeight;
+
+        result += diffuseColor * indirectDiffuse + indirectGlossy;
+        AiAOVSetRGB(sg, AiShaderEvalParamStr(p_aov_indirect_diffuse), indirectDiffuse);
+        AiAOVSetRGB(sg, AiShaderEvalParamStr(p_aov_indirect_specular), indirectGlossy);
     }
 
-    auto indirectDiffuse = sampleDiffuse ? AiOrenNayarIntegrate(&sg->Nf, sg, roughness) : AI_RGB_BLACK;
-    auto indirectGlossy = sampler.integrateGlossy(sg) * specularWeight;
-
-    result += diffuseColor * indirectDiffuse + indirectGlossy;
     sg->out.RGB = result;
+    sg->out_opacity = AiColorClamp(opacity, 0.0f, 1.0f);
 }

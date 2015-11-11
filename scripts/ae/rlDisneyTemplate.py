@@ -1,7 +1,6 @@
 import pymel.core as pm
-import mtoa.utils as utils
-import mtoa.ui.ae.utils as aeUtils
 from mtoa.ui.ae.shaderTemplate import ShaderAETemplate
+
 
 class AErlDisneyTemplate(ShaderAETemplate):
 
@@ -10,10 +9,6 @@ class AErlDisneyTemplate(ShaderAETemplate):
         self.addSwatch()
         self.beginScrollLayout()
 
-        # Add a list that allows to replace the shader for other one
-        # self.addCustom('message', 'AEshaderTypeNew', 'AEshaderTypeReplace')
-
-        # Begins a "Color Section"
         self.beginLayout("Material Attributes", collapse=False)
         self.addControl("base_color")
         self.addControl("subsurface")
@@ -26,6 +21,7 @@ class AErlDisneyTemplate(ShaderAETemplate):
         self.addControl("sheen_tint")
         self.addControl("clearcoat")
         self.addControl("clearcoat_gloss")
+        self.addControl("opacity")
         self.endLayout()
 
         self.beginLayout("Extended Controls", collapse=False)
@@ -34,6 +30,8 @@ class AErlDisneyTemplate(ShaderAETemplate):
         self.endLayout()
 
         self.addBumpLayout()
+        self.addAOVLayout(aovReorder=["direct_diffuse", "direct_specular",
+                          "indirect_diffuse", "indirect_specular"])
 
         # include/call base class/node attributes
         pm.mel.AEdependNodeTemplate(self.nodeName)

@@ -13,14 +13,13 @@
 #include <cassert>
 
 #include <ai.h>
-//#include "rlUtil.h"
+
+#include "rlUtil.h"
 
 AI_SHADER_NODE_EXPORT_METHODS(DisneyMethod);
 
-inline float colorToLuminance(const AtRGB &col)
+namespace
 {
-    return col.r * 0.212671f + col.g * 0.715160f + col.b * 0.072169f;
-}
 
 enum    DisneyParams
 {
@@ -45,9 +44,6 @@ enum    DisneyParams
     p_aov_indirect_diffuse,
     p_aov_indirect_specular,
 };
-
-namespace
-{
 
 struct  ShaderData
 {
@@ -186,7 +182,7 @@ public:
 
         // Compute specularF0 (i.e. reflectance at normal incidence) whiich is used for
         // the materials whose IOR is in [1.0, 1.8].
-        float luminance = colorToLuminance(mBaseColor);
+        float luminance = rls::colorToLuminance(mBaseColor);
         AtRGB tintColor = luminance > 0.0f ? mBaseColor / luminance : AI_RGB_WHITE;
         AtRGB metallicColor = mSpecular * LERP(mSpecularTint, AI_RGB_WHITE, tintColor);
         mSpecularF0 = LERP(mMetallic, metallicColor, mBaseColor);
@@ -356,51 +352,10 @@ private:
         return (Ds * Fs * Gs + mClearcoat * Dr * Fr * Gr) + Fsheen;
     }
 
-    static AtVector sphericalDirection(float cosTheta, float phi)
-    {
-        AtVector omega;
-        omega.z = cosTheta;
-        float r = sqrtf(1.0f - SQR(omega.z));
-        omega.x = r * cosf(phi);
-        omega.y = r * sinf(phi);
-        return omega;
-    }
-
-    static AtVector getReflectDirection(const AtVector &i, const AtVector &m)
-    {
-        return 2.0f * ABS(AiV3Dot(i, m)) * m - i;
-    }
-
-    AtVector   concentricDiskSample(float rx, float ry) const
-    {
-        rx = rx * 2.0f - 1.0f;
-        ry = ry * 2.0f - 1.0f;
-
-        AtVector result;
-        if (rx == 0.0f && ry == 0.0f) {
-            // Handle degenerate case
-            result.x = result.y = 0.0f;
-            return result;
-        }
-
-        float r, phi;
-        if (ABS(rx) > ABS(ry)) {
-            r = rx;
-            phi = AI_PIOVER2 * 0.5f * ry / rx;
-        } else {
-            r = ry;
-            phi = AI_PIOVER2 * (1.0f - 0.5f * rx / ry);
-        }
-
-        result.x = r * cosf(phi);
-        result.y = r * sinf(phi);
-        return result;
-    }
-
     //! Sample hemisphere according to cosine-weighted solidangle.
     AtVector    sampleDiffuseDirection(float rx, float ry) const
     {
-        AtVector omega = concentricDiskSample(rx, ry);
+        AtVector omega = rls::concentricDiskSample(rx, ry);
         omega.z = sqrtf(MAX(0.0f, 1.0f - SQR(omega.x) - SQR(omega.y)));
         AiV3RotateToFrame(omega, mAxisU, mAxisV, mAxisN);
         return omega;
@@ -428,7 +383,7 @@ private:
             return AI_V3_ZERO;
         }
 
-        return getReflectDirection(mViewDir, M);
+        return rls::reflectDirection(mViewDir, M);
     }
 
     //! Sample the direction according to GTR1
@@ -440,7 +395,7 @@ private:
             ? sqrtf(1.0f - ry)
             : sqrtf((1.0f - pow(a2, 1.0f - ry)) / (1.0f - a2));
 
-        AtVector omega = sphericalDirection(cosThetaH, phiH);
+        AtVector omega = rls::sphericalDirection(cosThetaH, phiH);
         AiV3RotateToFrame(omega, mAxisU, mAxisV, mAxisN);
         return AiV3Normalize(omega);
     }
@@ -512,9 +467,9 @@ private:
 
         // Transform to local frame
         float cosThetaV = CLAMP(AiV3Dot(mAxisN, V), -1.0f, 1.0f);
-        assert(cosThetaV >= 0.0f);
+        //assert(cosThetaV >= 0.0f);
         float phiV = atan2f(AiV3Dot(mAxisV, V), AiV3Dot(mAxisU, V));
-        V = sphericalDirection(cosThetaV, phiV);
+        V = rls::sphericalDirection(cosThetaV, phiV);
 
         // Stretch view direction
         V.x *= mAlphaX;
@@ -548,7 +503,7 @@ private:
         auto thetaM = atanf(mRoughness * sqrtf(rx / (1.0f - rx)));
         auto phiM = AI_PITIMES2 * ry;
 
-        AtVector omega = sphericalDirection(cosf(thetaM), phiM);
+        AtVector omega = rls::sphericalDirection(cosf(thetaM), phiM);
         AiV3RotateToFrame(omega, mAxisU, mAxisV, mAxisN);
         return omega;
     }
@@ -683,7 +638,8 @@ node_initialize
 {
     // Dump samples
     //auto sg = AiShaderGlobals();
-    //sg->Rd = -rls::sphericalDirection(cosf(1.5f), AI_PIOVER2 * 0.0f);
+    //sg->Rd = -rls::sphericalDirection(cosf(AI_PIOVER2 * 0.95f), AI_PIOVER2 * 0.0f);
+    //sg->Rd = -rls::sphericalDirection(cosf(AI_PIOVER2 * 0.5f), AI_PIOVER2 * 0.0f);
     //AiV3Create(sg->Nf, 0.0f, 0.0f, 1.0f);
     //DisneySampler brdf(node, sg);
     //rls::SampleWriter samplerWiter(512, 256);
@@ -717,7 +673,7 @@ node_finish
 
 shader_evaluate
 {
-    AtRGB opacity = AiShaderEvalParamFlt(p_opacity) * AI_RGB_WHITE;
+    AtRGB opacity = AiShaderEvalParamRGB(p_opacity);
 
     if (AiShaderGlobalsApplyOpacity(sg, opacity)) {
         return;
@@ -750,17 +706,21 @@ shader_evaluate
     }
 
     AtColor result = diffuse + specular;
-    AiAOVSetRGB(sg, AiShaderEvalParamStr(p_aov_direct_diffuse), diffuse);
-    AiAOVSetRGB(sg, AiShaderEvalParamStr(p_aov_direct_specular), specular);
 
-    ShaderData *data = static_cast<ShaderData *>(AiNodeGetLocalData(node));
-    auto indirectDiffuse = data->shouldTraceDiffuse(sg) ? sampler.integrateDiffuse(sg, data) : AI_RGB_BLACK;
-    auto indirectGlossy = data->shouldTraceGlossy(sg) ? sampler.integrateGlossy(sg) : AI_RGB_BLACK;
-    //auto indirectGlossy = data->shouldTraceGlossy(sg) ? sampler.integrateGlossy(sg, data) : AI_RGB_BLACK;
+    if (sg->Rt & AI_RAY_CAMERA) {
+        AiAOVSetRGB(sg, AiShaderEvalParamStr(p_aov_direct_diffuse), diffuse);
+        AiAOVSetRGB(sg, AiShaderEvalParamStr(p_aov_direct_specular), specular);
 
-    result += indirectDiffuse + indirectGlossy;
-    AiAOVSetRGB(sg, AiShaderEvalParamStr(p_aov_indirect_diffuse), indirectDiffuse);
-    AiAOVSetRGB(sg, AiShaderEvalParamStr(p_aov_indirect_specular), indirectGlossy);
+        ShaderData *data = static_cast<ShaderData *>(AiNodeGetLocalData(node));
+        auto indirectDiffuse = data->shouldTraceDiffuse(sg) ? sampler.integrateDiffuse(sg, data) : AI_RGB_BLACK;
+        auto indirectGlossy = data->shouldTraceGlossy(sg) ? sampler.integrateGlossy(sg) : AI_RGB_BLACK;
+        //auto indirectGlossy = data->shouldTraceGlossy(sg) ? sampler.integrateGlossy(sg, data) : AI_RGB_BLACK;
+
+        result += indirectDiffuse + indirectGlossy;
+        AiAOVSetRGB(sg, AiShaderEvalParamStr(p_aov_indirect_diffuse), indirectDiffuse);
+        AiAOVSetRGB(sg, AiShaderEvalParamStr(p_aov_indirect_specular), indirectGlossy);
+    }
 
     sg->out.RGB = result;
+    sg->out_opacity = AiColorClamp(opacity, 0.0f, 1.0f);
 }

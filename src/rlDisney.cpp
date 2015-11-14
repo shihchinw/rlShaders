@@ -175,8 +175,8 @@ public:
 
         //float aniso = fabs(mAnisotropic - 0.5f) * 2.0f;
         float aspect = sqrt(1.0f - mAnisotropic * 0.9f);
-        mAlphaX = MAX(1e-4f, SQR(mRoughness) / aspect);
-        mAlphaY = MAX(1e-4f, SQR(mRoughness) * aspect);
+        mAlphaX = MAX(1e-2f, SQR(mRoughness) / aspect);
+        mAlphaY = MAX(1e-2f, SQR(mRoughness) * aspect);
 
         mSpecularRoughness = SQR(mRoughness);
 
@@ -254,11 +254,13 @@ public:
             ray.dir = sampleDiffuseDirection(samples[0], samples[1]);
 
             if (AiTrace(&ray, &scrs)) {
-                result += scrs.color * evalDiffuse(ray.dir);
+                auto NdotL = AiV3Dot(ray.dir, sg->Nf);
+                assert(NdotL > 0.0f);
+                result += scrs.color * evalDiffuse(ray.dir) * NdotL / evalDiffusePdf(ray.dir);
             }
         }
 
-        return result * AiSamplerGetSampleInvCount(sampleIter) * AI_PI;
+        return result * AiSamplerGetSampleInvCount(sampleIter);
     }
 
     AtColor     evalDiffuseLightSample(AtShaderGlobals *sg)
@@ -302,9 +304,10 @@ public:
                 continue;
             }
 
+            auto NdotL = CLAMP(AiV3Dot(ray.dir, sg->Nf), 0.0f, 1.0f);
             auto pdf = evalPdf(this, &ray.dir);
             if (pdf > AI_EPSILON) {
-                result += scrs.color * evalBrdf(this, &ray.dir) / pdf;
+                result += scrs.color * evalBrdf(this, &ray.dir) * NdotL / pdf;
             }
         }
 
@@ -508,7 +511,7 @@ private:
         return omega;
     }
 
-    //! Sample over cosine
+    //! Return the PDF of cosine-weighted hemisphere sampling
     float   evalDiffusePdf(const AtVector &i) const
     {
         return MAX(1e-4f, AiV3Dot(i, mAxisN) * AI_ONEOVERPI);

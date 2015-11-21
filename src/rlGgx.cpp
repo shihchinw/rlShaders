@@ -103,12 +103,13 @@ enum    GgxParams
 {
     p_Kd_color,
     p_Kd,
+    p_Kd_roughness,
     p_Ks_color,
     p_Ks,
+    p_Ks_roughness,
     p_Kt_Color,
     p_Kt,
     p_ior,
-    p_roughness,
     p_anisotropic,
     p_opacity,
     p_opacity_color,
@@ -166,15 +167,15 @@ node_parameters
 {
     AiParameterRGB("KdColor", 1.0f, 1.0f, 1.0f);
     AiParameterFLT("Kd", 0.5f);
+    AiParameterFLT("diffuseRoughness", 0.0f);
 
     AiParameterRGB("KsColor", 1.0f, 1.0f, 1.0f);
     AiParameterFLT("Ks", 0.5f);
+    AiParameterFLT("specularRoughness", 0.0f);
 
     AiParameterRGB("KtColor", 1.0f, 1.0f, 1.0f);
     AiParameterFLT("Kt", 0.0f);
     AiParameterFLT("ior", 1.0f);
-
-    AiParameterFLT("roughness", 0.0f);
     AiParameterFLT("anisotropic", 0.0f);
 
     AiParameterFLT("opacity", 1.0f);
@@ -243,10 +244,10 @@ shader_evaluate
 
     auto specColor = AiShaderEvalParamRGB(p_Ks_color);
     auto ior = AiShaderEvalParamFlt(p_ior);
-    auto roughness = AiShaderEvalParamFlt(p_roughness);
+    auto specRoughness = AiShaderEvalParamFlt(p_Ks_roughness);
     auto anisotropic = AiShaderEvalParamFlt(p_anisotropic);
 
-    rls::GgxSampler sampler(sg, specColor, ior, roughness, anisotropic);
+    rls::GgxSampler sampler(sg, specColor, ior, specRoughness, anisotropic);
     ShaderData *data = static_cast<ShaderData *>(AiNodeGetLocalData(node));
 
     if (sg->Rt & AI_RAY_SHADOW) {
@@ -260,7 +261,8 @@ shader_evaluate
     auto maxDiffuseDepth = AiNodeGetInt(options, "GI_diffuse_depth");
     auto maxGlossyDepth = AiNodeGetInt(options, "GI_glossy_depth");
 
-    auto diffData = AiOrenNayarMISCreateData(sg, roughness);
+    auto diffRoughness = AiShaderEvalParamFlt(p_Kd_roughness);
+    auto diffData = AiOrenNayarMISCreateData(sg, diffRoughness);
 
     auto diffuseWeight = AiShaderEvalParamFlt(p_Kd);
     auto diffuseColor = AiShaderEvalParamRGB(p_Kd_color) * diffuseWeight;
@@ -296,10 +298,15 @@ shader_evaluate
         AiAOVSetRGB(sg, AiShaderEvalParamStr(p_aov_direct_specular), specular);
         AiAOVSetRGB(sg, AiShaderEvalParamStr(p_aov_refract), transmission);
 
-        auto indirectDiffuse = sampleDiffuse ? AiOrenNayarIntegrate(&sg->Nf, sg, roughness) : AI_RGB_BLACK;
+        auto indirectDiffuse = AI_RGB_BLACK;
+        if (sampleDiffuse) {
+            indirectDiffuse = diffuseColor * AiBRDFIntegrate(sg, diffData,
+                AiOrenNayarMISSample, AiOrenNayarMISBRDF, AiOrenNayarMISPDF, AI_RAY_DIFFUSE);
+        }
+
         auto indirectGlossy = sampler.integrateGlossy(sg) * specularWeight;
 
-        result += diffuseColor * indirectDiffuse + indirectGlossy;
+        result += indirectDiffuse + indirectGlossy;
         AiAOVSetRGB(sg, AiShaderEvalParamStr(p_aov_indirect_diffuse), indirectDiffuse);
         AiAOVSetRGB(sg, AiShaderEvalParamStr(p_aov_indirect_specular), indirectGlossy);
     }

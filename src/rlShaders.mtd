@@ -15,7 +15,10 @@
         softmax             FLOAT   1.0
     [attr ior]
         min                 FLOAT   0.0
-    [attr roughness]
+    [attr diffuseRoughness]
+        min                 FLOAT   0.0
+        softmax             FLOAT   1.0
+    [attr specularRoughness]
         min                 FLOAT   0.0
         softmax             FLOAT   1.0
     [attr anisotropic]

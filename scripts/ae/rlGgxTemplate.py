@@ -9,24 +9,18 @@ class AErlGgxTemplate(ShaderAETemplate):
         self.addSwatch()
         self.beginScrollLayout()
 
-        # Add a list that allows to replace the shader for other one
-        # self.addCustom('message', 'AEshaderTypeNew', 'AEshaderTypeReplace')
-
-        # Begins a "Color Section"
-        self.beginLayout("Common Attributes", collapse=False)
-        self.addControl("roughness")
-        self.addControl("anisotropic")
-        self.addControl("ior", label="IOR")
-        self.endLayout()
-
         self.beginLayout("Diffuse", collapse=False)
         self.addControl("KdColor", label="Color")
         self.addControl("Kd", label="Weight")
+        self.addControl("diffuseRoughness", label="Roughness")
         self.endLayout()
 
         self.beginLayout("Specular", collapse=False)
         self.addControl("KsColor", label="Color")
         self.addControl("Ks", label="Weight")
+        self.addControl("specularRoughness", label="Roughness")
+        self.addControl("anisotropic")
+        self.addControl("ior", label="IOR")
         self.endLayout()
 
         self.beginLayout("Refract", collapse=False)

@@ -59,11 +59,11 @@ struct  ShaderData
         AiSamplerDestroy(mDiffuseSampler);
         mDiffuseSampler = AiSampler(diffuseSampleNum, 2);
 
-        auto sampleNum = AiNodeGetInt(options, "sss_bssrdf_samples");
+        auto sampleNum = AiNodeGetInt(options, "GI_sss_samples");
         AiSamplerDestroy(mSssSampler);
         mSssSampler = AiSampler(sampleNum, 2);
 
-        mUseCavityFade = AiNodeGetBool(node, AtString("cavity_fadeout"));
+        mUseCavityFade = AiNodeGetBool(node, AtString("sss_cavity_fadeout"));
     }
 
     AtSamplerIterator *getDiffuseSamplerIter(AtShaderGlobals *sg) const
@@ -182,15 +182,13 @@ shader_evaluate
     auto maxGlossyDepth = AiNodeGetInt(options, "GI_glossy_depth");
 
     // Evaluate sheen and specular
-    if (sg->Rr_gloss < maxGlossyDepth) {
+    if (sg->Rr_gloss <= maxGlossyDepth) {
         auto sheenWeight = AiShaderEvalParamFlt(p_sheen_weight);
         auto sheenColor = AiShaderEvalParamRGB(p_sheen_color);
         auto sheenIor = AiShaderEvalParamFlt(p_sheen_ior);
         auto sheenRoughness = AiShaderEvalParamFlt(p_sheen_roughness);
-        auto sheenF0 = SQR((sheenIor - 1.0f) / (sheenIor + 1.0f));
-        sheenFresnel = AiFresnelWeight(sg->Nf, sg->Rd, sheenF0) * sheenWeight;
 
-        if (sheenFresnel > AI_EPSILON) {
+        if (sheenWeight > AI_EPSILON) {
             rls::GgxSampler sheenSampler(sg, sheenColor, sheenIor, sheenRoughness);
             AiLightsPrepare(sg);
             while (AiLightsGetSample(sg)) {
@@ -202,6 +200,8 @@ shader_evaluate
             if (sg->Rr == 0) {
                 sheen += sheenSampler.integrateGlossy(sg);
             }
+
+            sheenFresnel = sheenSampler.getAvgReflectWeight() * sheenWeight;
         }
 
         sheen *= sheenWeight;
@@ -211,10 +211,7 @@ shader_evaluate
         auto specularIor = AiShaderEvalParamFlt(p_specular_ior);
         auto specularRoughness = AiShaderEvalParamFlt(p_specular_roughness);
 
-        auto specularF0 = SQR((specularIor - 1.0f) / (specularIor + 1.0f));
-        specularFresnel = AiFresnelWeight(sg->Nf, sg->Rd, specularF0) * specularWeight;
-
-        if (specularFresnel > AI_EPSILON) {
+        if (specularWeight > AI_EPSILON) {
             rls::GgxSampler specularSampler(sg, specularColor, specularIor, specularRoughness);
 
             AiLightsPrepare(sg);
@@ -227,6 +224,8 @@ shader_evaluate
             if (sg->Rr == 0) {
                 specular += specularSampler.integrateGlossy(sg);
             }
+
+            specularFresnel = specularSampler.getAvgReflectWeight() * specularWeight;
         }
 
         specular *= specularWeight * (1.0f - sheenFresnel);
@@ -236,13 +235,15 @@ shader_evaluate
     auto distanceScale = AiShaderEvalParamFlt(p_distance_multiplier);
     auto scatterDist = AiShaderEvalParamVec(p_scatter_distance) * distanceScale;
     auto sssWeight = AiShaderEvalParamFlt(p_sss_weight);
-    //sssWeight *= (1.0f - sheenFresnel) * (1.0f - specularFresnel);
+    sssWeight *= 1.0f - specularFresnel * (1.0f - sheenFresnel);
+
 
     rls::SssSampler<rls::NDProfile> sssSampler(sg, albedo, scatterDist);
-    auto sss = AI_RGB_BLACK;
-    if (sssWeight > AI_EPSILON) {
-        sss = sssSampler.integrateScatter(sg, data) * sssWeight;
-    }
+    //rls::SssSampler<rls::GaussianProfile> sssSampler(sg, albedo, scatterDist);
+
+    auto sss = sssWeight < AI_EPSILON
+        ? AI_RGB_BLACK
+        : sssSampler.integrateScatter(sg, data) * sssWeight;
 
     if (sg->Rt & AI_RAY_CAMERA) {
         AiAOVSetRGB(sg, AiShaderEvalParamStr(p_aov_sheen), sheen);

@@ -11,7 +11,7 @@ class AErlSkinTemplate(ShaderAETemplate):
         self.beginScrollLayout()
 
         # Add a list that allows to replace the shader for other one
-        # self.addCustom('message', 'AEshaderTypeNew', 'AEshaderTypeReplace')
+        # self.addCustom("message", "AEshaderTypeNew", "AEshaderTypeReplace")
 
         # Begins a "Color Section"
         self.beginLayout("Sheen", collapse=False)
@@ -31,18 +31,18 @@ class AErlSkinTemplate(ShaderAETemplate):
         self.beginLayout("SSS", collapse=False)
         self.addControl("sss_color", label="Color")
         self.addControl("sss_weight", label="Weight")
-        self.addControl("sss_dist_multiplier", label="Unit Length")
+        self.addControl("sss_dist_multiplier", label="Distance Multiplier")
         self.addControl("sss_scatter_dist", label="Scatter Distance")
-        self.addControl("sss_cavity_fadeout", label="Cavity Affect Diffusion")
+        self.addControl("sss_cavity_fadeout", label="Cavity Affects Diffusion")
         self.endLayout()
 
-        self.beginLayout('Opacity', collapse=True)
-        self.addControl('opacity', label='Weight')
-        self.addControl('opacity_color', label='Color')
+        self.beginLayout("Opacity", collapse=True)
+        self.addControl("opacity", label="Weight")
+        self.addControl("opacity_color", label="Color")
         self.endLayout()
 
         self.addBumpLayout()
-        self.addAOVLayout(aovReorder=['sheen', 'specular', 'sss'])
+        self.addAOVLayout(aovReorder=["sheen", "specular", "sss"])
 
         # include/call base class/node attributes
         pm.mel.AEdependNodeTemplate(self.nodeName)

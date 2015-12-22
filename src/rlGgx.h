@@ -12,6 +12,8 @@
 
 #include <algorithm>
 #include <memory>
+#include <cassert>
+
 #include <ai.h>
 
 #include "rlUtil.h"
@@ -96,7 +98,12 @@ public:
     {
         auto brdf = static_cast<const GgxSamplerT *>(brdfData);
         auto M = brdf->mNormalSampler->evalSample(rx, ry);
-        return rls::reflectDirection(brdf->mViewDir, M);
+        auto L = rls::reflectDirection(brdf->mViewDir, M);
+
+        brdf->mReflectWeight += brdf->fresnel(L, M);
+        brdf->mMisSampleCount++;
+
+        return L;
     }
 
     //! Return the reflectance
@@ -124,6 +131,8 @@ public:
                float ior, float roughness, float anisotropic = 0.0f)
         : mSpecularColor(specColor)
         , mNormalSampler(nullptr)
+        , mReflectWeight(0.0f)
+        , mMisSampleCount(0.0f)
     {
         bool isEntering = AiV3Dot(sg->N, sg->Rd) < AI_EPSILON;
         mIorIn = 1.0f;
@@ -167,6 +176,11 @@ public:
         }
 
         return AiBRDFIntegrate(sg, this, evalSample, evalBrdf, evalPdf, AI_RAY_GLOSSY);
+    }
+
+    float       getAvgReflectWeight() const
+    {
+        return mMisSampleCount > 0.0f ? mReflectWeight / mMisSampleCount : 1.0f;
     }
 
     //template <typename ShaderData>
@@ -237,7 +251,7 @@ public:
         auto eta = mIorOut / mIorIn;
         auto f0 = SQR((eta - 1.0f) / (eta + 1.0f));
         auto m1 = -1.0f * SGN(AiV3Dot(i, m)) * m;
-        return AiFresnelWeight(m1, i, f0);
+        //return AiFresnelWeight(m1, i, f0);    // This would return negative value sometimes?!
 
         // TODO: Check the weird case when the IOR is less than one.
         float c = ABS(AiV3Dot(i, m));
@@ -345,14 +359,17 @@ public:
 private:
     std::shared_ptr<NDSampler>    mNormalSampler;
 
-    CoordBasis  mBasis;
-    AtColor     mSpecularColor;
-    AtVector    mViewDir;
-    AtVector    mAxisN;
+    CoordBasis      mBasis;
+    AtColor         mSpecularColor;
+    AtVector        mViewDir;
+    AtVector        mAxisN;
 
-    float       mRoughness;
-    float       mAlphaX, mAlphaY;
-    float       mIorIn, mIorOut;
+    float           mRoughness;
+    float           mAlphaX, mAlphaY;
+    float           mIorIn, mIorOut;
+
+    mutable float   mReflectWeight;
+    mutable float   mMisSampleCount;
 };
 
 using GgxSampler = GgxSamplerT<VNDFKernel>;

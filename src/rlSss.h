@@ -62,7 +62,7 @@ public:
         return mMaxRadius;
     }
 
-    void    setDistance(const AtVector &dist)
+    void    setDistance(const AtVector &dist, const AtColor &albedo)
     {
         mMaxRadius = dist.x;
         mVariance = SQR(mMaxRadius) / 12.46f;
@@ -210,10 +210,9 @@ public:
 
         AtSamplerIterator *sampleIter = data->getSssSamplerIter(sg);
         float   samples[2];
-        int index = 0;
 
         while (AiSamplerGetSample(sampleIter, samples)) {
-            float r = getProbeRay(samples[0], samples[1], sg->P, ray, index++);
+            float r = getProbeRay(samples[0], samples[1], sg->P, ray);
 
             AiStateSetMsgInt(gRlsRayType, kSssProbeRay);
             AiStateSetMsgPtr(gRlsSssOrigObj, sg->Op);
@@ -261,7 +260,7 @@ public:
     }
 
 private:
-    void    alignDir(const AtVector refDir, AtVector &dir)
+    void    alignDir(const AtVector &refDir, AtVector &dir)
     {
         if (AiV3Dot(refDir, dir) < 0.0f) {
             dir *= -1.0f;
@@ -275,6 +274,7 @@ private:
 
         int trialCount = kMaxProbeDepth;
         AtShaderGlobals sgOut;
+        sg->fhemi = false;
 
         while (trialCount > 0 && AiTraceProbe(&ray, &sgOut)) {
             --trialCount;
@@ -315,6 +315,7 @@ private:
             ray.origin = sgOut.P;
             ray.maxdist = msgData->maxDist;
             sg->fi = UINT_MAX;
+            sgOut.fi = UINT_MAX;
 
             if (msgData->maxDist <= 0.0f) {
                 break;
@@ -363,15 +364,22 @@ private:
         AtVector Nref = sg->N;
         alignDir(Nref, sg->Nf);
         alignDir(Nref, sg->Ngf);
+        alignDir(Nref, sg->Ns);
+        alignDir(Nref, sg->Ng);
         sample.N = sg->Ns;
 
         auto cavityFade = 1.0f;
         if (data->useCavityFade()) {
-            // Use cos(theta/2) to approximate the reduce rate of diffusion due to cavity.
             auto dispDir = sample.disp / sample.r;
-            auto vec = AiV3Dot(msgData->No, dispDir) < 0.0f ? dispDir : msgData->No;
-            auto cosCavityAngle = CLAMP(AiV3Dot(sample.N, vec), -1.0f, 1.0f);
-            cavityFade = sqrt((1.0f + cosCavityAngle) * 0.5f);
+            if (AiV3Dot(msgData->No, dispDir) < 0.0f) {
+                // Use cos for gradation.
+                auto cosCavityAngle = ABS(AiV3Dot(sample.N, msgData->No));
+                cavityFade = sqrt((1.0f + cosCavityAngle) * 0.5f);
+            } else {
+                // Use cos(theta/2) to approximate the reduce rate of diffusion due to cavity.
+                auto cosCavityAngle = CLAMP(AiV3Dot(sample.N, msgData->No), -1.0f, 1.0f);
+                cavityFade = sqrt((1.0f + cosCavityAngle) * 0.5f);
+            }
         }
 
         if (cavityFade > AI_EPSILON) {
@@ -446,8 +454,10 @@ private:
 
     //! Return the probe ray to find intersection near x_0.
     //! Based on BSSRDF importance sampling by Arnold.
-    float   getProbeRay(float rx, float ry, const AtVector &origin, AtRay &ray, int idx) const
+    float   getProbeRay(float rx, float ry, const AtVector &origin, AtRay &ray) const
     {
+        auto idx = 0;
+
         if (rx < 0.5f) {
             idx = 0;
             rx = LINEARSTEP(0.0f, 0.5f, rx);

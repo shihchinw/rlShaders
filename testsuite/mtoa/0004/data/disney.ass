@@ -1,0 +1,31 @@
+include "data/test_geo.ass"
+
+MayaShadingEngine
+{
+ name testShadingGroup
+ beauty rlDisney1
+}
+
+rlDisney
+{
+ name rlDisney1
+ base_color 0.850000024 0.704699695 0.205699995
+ subsurface 0
+ metallic 0
+ specular 0
+ specular_tint 0
+ roughness 0
+ anisotropic 0
+ sheen 0
+ sheen_tint 0
+ clearcoat 0
+ clearcoat_gloss 0
+ opacity 1 1 1
+ indirectDiffuseScale 1
+ indirectSpecularScale 1
+ aov_direct_diffuse "direct_diffuse"
+ aov_direct_specular "direct_specular"
+ aov_indirect_diffuse "indirect_diffuse"
+ aov_indirect_specular "indirect_specular"
+}
+

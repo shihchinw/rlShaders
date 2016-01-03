@@ -1,0 +1,175 @@
+### exported: Fri Jan 01 22:33:00 2016
+### from:     Arnold 4.2.11.0 windows icc-14.0.2 oiio-1.5.20 rlm-11.3.1 2015/10/27 15:44:19
+### host app: MtoA 1.2.4.3 f13c18f6f18b (HB-1.2.4.3) tip Maya 2015
+
+
+
+options
+{
+ AA_samples 3
+ outputs "RGBA RGBA defaultArnoldFilter@gaussian_filter defaultArnoldDriver@driver_exr.RGBA"
+ xres 256
+ yres 256
+ enable_fast_opacity on
+ texture_per_file_stats on
+ texture_searchpath "C:/Users/shihchinw/Documents/maya/projects/default/sourceimages"
+ texture_glossy_blur 0
+ camera "perspShape"
+ procedural_searchpath "C:/Users/shihchinw/Documents/maya/projects/default/"
+ texture_gamma 2.20000005
+ light_gamma 2.20000005
+ shader_gamma 2.20000005
+ GI_diffuse_depth 1
+ GI_glossy_depth 1
+ GI_sss_samples 3
+ declare frame constant FLOAT
+ frame 1
+ declare render_layer constant STRING
+ render_layer "defaultRenderLayer"
+ declare fps constant FLOAT
+ fps 24
+}
+
+quad_light
+{
+ name aiAreaLightShape1
+ vertices 4 1 b85POINT
+yaRT=dzaRT=daRT=dzaRT=dyzyyz
+ decay_type "quadratic"
+ resolution 512
+ matrix
+ 3.51513553 0 0 0
+ 0 1.13427707e-015 -5.10832977 0
+ 0 5.10832977 1.13427707e-015 0
+ -2.44336152 0.639811516 -1.32078811e-015 1
+ color 1 1 1
+ intensity 1
+ exposure 0
+ cast_shadows on
+ cast_volumetric_shadows on
+ shadow_density 1
+ shadow_color 0 0 0
+ samples 2
+ normalize off
+ affect_diffuse on
+ affect_specular on
+ affect_volumetrics on
+ diffuse 1
+ specular 1
+ sss 1
+ indirect 1
+ max_bounces 999
+ volume_samples 2
+ volume 1
+}
+
+polymesh
+{
+ name pCubeShape1
+ nsides 6 1 UINT
+4 4 4 4 4 4
+ vidxs 24 1 b85UINT
+B$ZuK*%<ho2%s\>:$$-?2$vMr4%<MT0
+ nidxs 24 1 b85UINT
+B$v2N*&9nA:'RU4J(k<'Z*.woj+G^c%
+ uvidxs 24 1 b85UINT
+B$ZuK*%<ho2%s\>:&UObB$w/J=(3BP?
+ vlist 8 1 b85POINT
+aDq99aDq9989+]c89+]caDq9989+]caDq99!89+]c$$$$)aDq9989+]caDq9989+]c89+]c!aDq99$$$$(89+]caDq99aDq99
+ nlist 24 1 b85VECTOR
+zzyzzyzzyzzyzyzzyzzyzzy!$$$$$$$$$'aRT=dzzaRT=dzzaRT=dzzaRT=dzaRT=dzzaRT=dzzaRT=dzzaRT=dzyzzyzzyzzyzzaRT=dzzaRT=dzzaRT=dzzaRT=dzz
+ uvlist 14 1 b85POINT2
+82:0xz8<Nt.z82:0x8+HY88<Nt.8+HY882:0x89+]c8<Nt.89+]c82:0x8?r5N8<Nt.8?r5N82:0xy8<Nt.y8C@Knz8C@Kn8+HY87reTbz7reTb8+HY8
+ smoothing on
+ visibility 255
+ sidedness 255
+ receive_shadows on
+ self_shadows on
+ matrix
+ 11.8286572 0 0 0
+ 0 1 0 0
+ 0 0 6.08198261 0
+ 0 0 0 1
+ shader "rlSkin1SG"
+ opaque on
+ matte off
+ id 683108022
+ declare mtoa_shading_groups constant ARRAY NODE
+ mtoa_shading_groups "rlSkin1SG"
+}
+
+gaussian_filter
+{
+ name defaultArnoldFilter@gaussian_filter
+ width 2
+}
+
+driver_exr
+{
+ name defaultArnoldDriver@driver_exr.RGBA
+ filename "C:/Users/shihchinw/Documents/maya/projects/default/images/untitled.exr"
+ compression "zip"
+ half_precision on
+ tiled off
+ preserve_layer_name off
+ autocrop on
+ append off
+}
+
+MayaShadingEngine
+{
+ name rlSkin1SG
+ beauty rlSkin1
+}
+
+rlSkin
+{
+ name rlSkin1
+ sss_color 1 0.842350006 0.5
+ sss_weight 1
+ sss_dist_multiplier 1
+ sss_scatter_dist 1 1 1
+ sss_cavity_fadeout off
+ specular_color 1 1 1
+ specular_weight 0
+ specular_roughness 0.5
+ specular_ior 1.44000006
+ sheen_color 1 1 1
+ sheen_weight 0
+ sheen_roughness 0.349999994
+ sheen_ior 1.44000006
+ opacity 1
+ opacity_color 1 1 1
+ aov_sheen "sheen"
+ aov_specular "specular"
+ aov_sss "sss"
+}
+
+persp_camera
+{
+ name perspShape
+ fov 54.4322243
+ focus_distance 1
+ aperture_size 0
+ aperture_blades 0
+ aperture_rotation 0
+ aperture_blade_curvature 0
+ aperture_aspect_ratio 1
+ uv_remap 0 0 0 0
+ matrix
+ 0.763796031 2.77555756e-017 -0.645457685 0
+ -0.473119438 0.680230379 -0.559861243 0
+ 0.439059913 0.732998371 0.519557238 0
+ 6.59284163 11.006567 7.80157471 1
+ near_clip 0.100000001
+ far_clip 10000
+ shutter_start 0
+ shutter_end 1
+ shutter_type "box"
+ rolling_shutter "off"
+ rolling_shutter_duration 0
+ screen_window_min -1 -1
+ screen_window_max 1 1
+ exposure 0
+}
+

@@ -1,0 +1,29 @@
+include "data/test_geo.ass"
+
+MayaShadingEngine
+{
+ name testShadingGroup
+ beauty rlGgx1
+}
+
+rlGgx
+{
+ name rlGgx1
+ KdColor 1 1 1
+ Kd 0
+ diffuseRoughness 0
+ KsColor 1 1 1
+ Ks 1
+ specularRoughness 0.349999994
+ KtColor 1 1 1
+ Kt 0
+ ior 1.35000002
+ anisotropic 0
+ opacity 1
+ opacity_color 1 1 1
+ aov_direct_diffuse "direct_diffuse"
+ aov_direct_specular "direct_specular"
+ aov_refract "refraction"
+ aov_indirect_diffuse "indirect_diffuse"
+ aov_indirect_specular "indirect_specular"
+}

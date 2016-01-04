@@ -352,7 +352,7 @@ private:
 
         // The denominator for specular reflection (4 * LdotN * VdotN) has been already
         // separated into smithG_GGX. We don't have to divide it again.
-        return (Ds * Fs * Gs + mClearcoat * Dr * Fr * Gr) + Fsheen;
+        return (Ds * Fs * Gs + mClearcoat * Dr * Fr * Gr) /** mMetallic*/ + Fsheen;
     }
 
     //! Sample hemisphere according to cosine-weighted solidangle.

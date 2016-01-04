@@ -3,10 +3,16 @@
 
 #include <assert.h>
 #include <array>
+#include <cstring>
 
 #include <ai.h>
 
 #include "rlUtil.h"
+
+#ifndef UINT_MAX
+#include <limits>
+#define UINT_MAX std::numeric_limits<unsigned int>::max()
+#endif
 
 #define STACKLESS_PROBE_TRACING
 
@@ -193,7 +199,7 @@ public:
         } else if (!msgData) {
             // Allocate message data structure for further tracing.
             msgData = (MsgData*)AiShaderGlobalsQuickAlloc(sg, sizeof(MsgData));
-            memset(msgData, 0, sizeof(MsgData));
+            std::memset(msgData, 0, sizeof(MsgData));
             AiStateSetMsgPtr(gRlsSssMsgData, msgData);
         }
 
@@ -203,6 +209,13 @@ public:
         // to workaround this problem.
         AtUInt32 oldPrimitiveId = sg->fi;
         sg->fi = UINT_MAX;
+
+       /* std::string sssSetName = AiNodeGetStrAtString(sg->Op, AtString("sss_setname"));
+        if (!sssSetName.empty()) {
+            bool exclusive = sssSetName[0] == '-';
+            sssSetName.substr(exclusive);
+            AiShaderGlobalsSetTraceSet(sg, AtString(sssSetName.c_str()), !exclusive);
+        }*/
 
         AtRay ray;
         AiMakeRay(&ray, AI_RAY_SUBSURFACE, &sg->P, nullptr, AI_BIG, sg);
@@ -256,6 +269,10 @@ public:
         sg->fi = oldPrimitiveId;
         AiStateSetMsgInt(gRlsRayType, kSssRayUndefined);
 
+        /*if (!sssSetName.empty()) {
+            AiShaderGlobalsUnsetTraceSet(sg);
+        }*/
+
         return mBaseColor * result * AiSamplerGetSampleInvCount(sampleIter);
     }
 
@@ -272,6 +289,8 @@ private:
     {
         auto sgOld = *sg;
 
+        //auto sssSetName = AiNodeGetStrAtString(sg->Op, AtString("sss_setname"));
+
         int trialCount = kMaxProbeDepth;
         AtShaderGlobals sgOut;
         sg->fhemi = false;
@@ -280,6 +299,17 @@ private:
             --trialCount;
 
             if (sgOut.Op != sg->Op) {
+                // Note: sgOut.shader returned from AiTraceProbe is a null pointer!!
+                //auto shader = AiNodeGetPtr(sgOut.Op, "shader");
+                //if (shader != sg->shader) {
+                //    // Only supports identical shader during probing.
+                //    continue;
+                //} else {
+                //    auto otherSssName = AiNodeGetStrAtString(sgOut.Op, AtString("sss_setname"));
+                //    if (sssSetName != otherSssName) {
+                //        continue;
+                //    }
+                //}
                 continue;
             }
 

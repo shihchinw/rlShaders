@@ -1,6 +1,10 @@
 #include <algorithm>
 #include <ai.h>
 
+#include <sstream>
+#include <iostream>
+#include <iomanip>
+
 #include "rlGgx.h"
 
 AI_SHADER_NODE_EXPORT_METHODS(GgxMethod);
@@ -203,14 +207,21 @@ node_initialize
 
     //auto specColor = AiShaderEvalParamRGB(p_Ks_color);
     //auto ior = AiShaderEvalParamFlt(p_ior);
-    //auto roughness = AiShaderEvalParamFlt(p_roughness);
+    //auto roughness = AiShaderEvalParamFlt(p_Ks_roughness);
     //auto anisotropic = AiShaderEvalParamFlt(p_anisotropic);
 
-    //rls::GgxSampler brdf(sg, specColor, ior, roughness, anisotropic);
-    //rls::SampleWriter samplerWiter(512, 256);
-
-    //samplerWiter.writeRadiance(sg, brdf);
-    //samplerWiter.writeSample(sg, brdf, 50);
+    //for (auto i = 0; i < 90; i++) {
+    //    //auto theta = AI_PIOVER2 * i / 90.0f;
+    //    auto theta = AI_PIOVER2 * 0.5f;
+    //    roughness = i / 90.0f;
+    //    sg->Rd = -rls::sphericalDirection(cosf(theta), AI_PIOVER2 * 0.0f);
+    //    std::stringstream ss;
+    //    ss << "D:/ggx_is.roughness." << std::setfill('0') << std::setw(4) << i << ".exr";
+    //    rls::GgxSampler     brdf(sg, specColor, ior, roughness, anisotropic);
+    //    rls::SampleWriter   samplerWiter(1024, 512, ss.str());
+    //    samplerWiter.writeRadiance(sg, brdf);
+    //    samplerWiter.writeSample(sg, brdf, 50);
+    //}
 
     ShaderData *data = new ShaderData;
     AiNodeSetLocalData(node, data);

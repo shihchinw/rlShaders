@@ -145,7 +145,7 @@ public:
         mBasis.N = mAxisN = sg->Nf;
         AiBuildLocalFramePolar(&mBasis.U, &mBasis.V, &mBasis.N);
 
-        auto aspect = sqrt(1.0f - anisotropic * 0.9f);
+        float aspect = sqrt(1.0f - anisotropic * 0.9f);
         mAlphaX = MAX(1e-4f, SQR(roughness) / aspect);
         mAlphaY = MAX(1e-4f, SQR(roughness) * aspect);
 

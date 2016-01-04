@@ -1,4 +1,4 @@
-#include <string>
+#include <cstring>
 #include <ai.h>
 
 extern  AtNodeMethods *GgxMethod;
@@ -59,7 +59,7 @@ node_loader
             return false;
     }
 
-    strcpy_s(node->version, AI_VERSION);
+    strcpy(node->version, AI_VERSION);
 
     return true;
 }

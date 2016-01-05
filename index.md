@@ -7,7 +7,7 @@ header-img: "images/header/index.jpg"
 
 # Paper <=> Code
 
-__rlShaders__ is a project for physically-based rendering experiments in Arnold renderer. It primarily focuses on `importance sampling` of recent PBR shading models. It's implemented for learning purposes, you can easily find the correcponding equations between paper and source code.
+__rlShaders__ is a project for physically-based rendering experiments in Arnold renderer. It primarily focuses on `importance sampling` of recent PBR shading models. It's implemented for learning purposes, you can easily find the corresponding equations between paper and source code.
 
 This also implies that current implementation is not production ready, the performance might be slower than the native shaders in Arnold. So far, it contains following shaders:
 

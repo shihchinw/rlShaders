@@ -1,0 +1,28 @@
+---
+layout: page
+---
+
+{% for post in site.tags[page.tag] %}{% if post.title != null %}
+<div class="post-preview">
+    <a href="{{ post.url | prepend: site.baseurl }}">
+        <h2 class="post-title">{{ post.title }}</h2>
+        {% if post.subtitle %}
+        <h3 class="post-subtitle">
+            {{ post.subtitle }}
+        </h3>
+        {% endif %}
+    </a>
+    <p class="post-meta">Posted by {% if post.author %}{{ post.author }}{% else %}{{ site.title }}{% endif %} on {{ post.date | date: "%B %-d, %Y" }}</p>
+
+    {% if post.tags.size > 0 %}
+        <small><span class="fa-stack fa-sm"><i class="fa fa-tags fa-stack-1x"></i></span>
+        {% assign sorted_tags = (post.tags | sort:0) %}
+        {% for tag in sorted_tags %}
+            <a href="/tags/{{ tag }}"><i>{{ tag }}</i></a>
+            {% if forloop.last != true %}, {% endif %}
+        {% endfor %}</small>
+    {% endif %}
+</div>
+{% if forloop.last != true %}<hr>{% endif %}
+{% endif %}
+{% endfor %}

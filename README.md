@@ -1,12 +1,3 @@
 # rlShaders
-Physically-based shading experiments in Arnold renderer.
 
-For more experiment notes, please visit <http://renderloop.blogspot.tw>
-
-### Building on Windows
-
-1. Open rlShaders.sln
-2. Open **View/Property Manager** and select the property sheet named ***MtoA***
-3. Configure Arnold library paths in **User Macros**
-4. The deploy directory for shader is set in **Build Events/Post-Build Event**
-5. Press **Build/Build Solution** to compile the shaders
+rlShaders is a project for physically-based rendering experiments in Arnold renderer. It primarily focuses on importance sampling of recent PBR shading models. It's implemented for learning purposes, you can easily find the corresponding equations between paper and source code. For more details please visit the [project pages.](http://shihchinw.github.io/rlShaders)

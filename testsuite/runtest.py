@@ -169,7 +169,7 @@ class Test(object):
     def _get_file(self):
         testfile = glob.glob('%s/data/*.ass' % self.root)
         if testfile and len(testfile) == 1:
-            return testfile[0]
+            return os.path.normpath(testfile[0])
 
     def _prompt(self, msg, color_code):
         _prompt('[%s] %s' % (self.case_id, msg), color_code)
@@ -277,7 +277,7 @@ def main(args, test_root, suite='mtoa'):
     else:
         shader_path = os.path.join(args.arnold_path, 'shaders')
         if args.shader_path:
-            shader_path += ';' + args.shader_path
+            shader_path += ';' + args.shader_path.rstrip('/\\')
 
         texture_path = os.path.join(test_root, "data")
         test_environ = {'SHADERPATH': shader_path, 'TEXPATH': texture_path}

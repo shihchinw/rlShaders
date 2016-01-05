@@ -1,6 +1,7 @@
 # Site settings
 title: "rlShaders"
 description: "Physically-based shading experiments in Arnold renderer."
+baseurl: "/rlShaders"
 twitter_username: shihchinw
 github_username:  shihchinw
 

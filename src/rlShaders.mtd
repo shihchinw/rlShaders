@@ -34,17 +34,11 @@
     maya.classification     STRING      "shader/surface"
     maya.id                 INT         0x04700002
 
-[node rlSssND]
-    desc                    STRING      ""
-    maya.name               STRING      "rlSssND"
-    maya.classification     STRING      "shader/surface"
-    maya.id                 INT         0x04700004
-
 [node rlSkin]
     desc                    STRING      ""
     maya.name               STRING      "rlSkin"
     maya.classification     STRING      "shader/surface"
-    maya.id                 INT         0x04700005
+    maya.id                 INT         0x04700003
 
     [attr sss_weight]
         min                 FLOAT   0.0

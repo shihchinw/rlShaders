@@ -3,16 +3,12 @@
 
 extern  AtNodeMethods *GgxMethod;
 extern  AtNodeMethods *DisneyMethod;
-//extern  AtNodeMethods *DisneyXMethod;
-extern  AtNodeMethods *SssNDMethod;
 extern  AtNodeMethods *SkinMethod;
 
 enum    ShaderId
 {
     kGgx,
     kDisney,
-    //kDisneyX,
-    kSssND,
     kSkin,
 };
 
@@ -31,20 +27,6 @@ node_loader
             node->methods = DisneyMethod;
             node->output_type = AI_TYPE_RGB;
             node->name = "rlDisney";
-            node->node_type = AI_NODE_SHADER;
-            break;
-
-       /* case kDisneyX:
-            node->methods = DisneyXMethod;
-            node->output_type = AI_TYPE_RGB;
-            node->name = "rlDisneyX";
-            node->node_type = AI_NODE_SHADER;
-            break;*/
-
-        case kSssND:
-            node->methods = SssNDMethod;
-            node->output_type = AI_TYPE_RGB;
-            node->name = "rlSssND";
             node->node_type = AI_NODE_SHADER;
             break;
 

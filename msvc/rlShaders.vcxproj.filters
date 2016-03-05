@@ -30,9 +30,6 @@
     <ClCompile Include="..\src\ext\tinyexr.cc">
       <Filter>Common</Filter>
     </ClCompile>
-    <ClCompile Include="..\src\rlSssND.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
     <ClCompile Include="..\src\rlUtil.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>

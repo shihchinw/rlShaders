@@ -16,7 +16,6 @@
     <ClCompile Include="..\src\rlGgx.cpp" />
     <ClCompile Include="..\src\rlSkin.cpp" />
     <ClCompile Include="..\src\rlSss.cpp" />
-    <ClCompile Include="..\src\rlSssND.cpp" />
     <ClCompile Include="..\src\rlUtil.cpp" />
     <ClCompile Include="..\src\_PluginMain.cpp" />
   </ItemGroup>

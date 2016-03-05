@@ -4,7 +4,7 @@
   <PropertyGroup Label="UserMacros">
     <MAYA_VER>2015</MAYA_VER>
     <MTOA_ROOT>C:\solidangle\mtoadeploy\$(MAYA_VER)</MTOA_ROOT>
-    <ARNOLD_ROOT>C:\solidangle\Arnold-4.2.10.0-windows</ARNOLD_ROOT>
+    <ARNOLD_ROOT>C:\solidangle\Arnold-4.2.11.0-windows</ARNOLD_ROOT>
   </PropertyGroup>
   <PropertyGroup>
     <OutDir>build\$(Platform)\$(Configuration)\</OutDir>

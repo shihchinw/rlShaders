@@ -136,7 +136,7 @@ public:
     {
         bool isEntering = AiV3Dot(sg->N, sg->Rd) < AI_EPSILON;
         mIorIn = 1.0f;
-        mIorOut = ior;
+        mIorOut = MAX(ior, 1e-4f);
         if (!isEntering) {
             std::swap(mIorIn, mIorOut);
         }

@@ -1,3 +1,17 @@
+msvc/build
+
+# User-specific files
+*.suo
+*.user
+
+# Visual C++ cache files
+ipch/
+*.aps
+*.ncb
+*.opensdf
+*.sdf
+*.cachefile
+
 # Compiled Object files
 *.slo
 *.lo
@@ -26,3 +40,8 @@
 *.exe
 *.out
 *.app
+
+# Test files
+test.exr
+test.log
+report.csv

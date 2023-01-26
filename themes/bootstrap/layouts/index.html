@@ -1,0 +1,49 @@
+{{ partial "header.html" .}}
+
+    <!-- Page Header -->
+    {{ if .Site.Params.IndexImage }}
+    <header class="intro-header" style="background-image: url('{{ .Site.BaseURL }}/{{ .Site.Params.IndexImage }}')">
+    {{ else }}
+    <header class="intro-header">
+    {{ end }}
+      <div class="overlay">
+        <div class="container">
+          <div class="row">
+            <div class="col-lg-8 col-lg-offset-2 col-md-10 col-md-offset-1">
+              <div class="site-heading">
+                <h1>{{ .Site.Title }}</h1>
+                <hr class="small"> {{ with .Site.Params.Description }}<span class="subheading">{{ . }}</span>{{ end }}
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <!-- Main Content -->
+    <div class="container">
+      <div class="row">
+        <div class="col-lg-8 col-lg-offset-2 col-md-10 col-md-offset-1">
+          <div class="homepage-content">
+          <!-- Note that the content for index.html, as a sort of list page, will pull from content/_index.md -->
+          {{.Content}}
+          </div>
+
+          {{ range .Paginator.Pages }}
+            {{ .Render "summary" }}
+          {{ end }}
+
+          {{ $paginator := .Paginate (where .Pages "Type" "post") }}
+          <ul class="pager">
+            {{ if $paginator.HasPrev }}
+            <li class="previous"><a href="{{ $paginator.Prev.URL }}" class="prev">&larr; Newer Posts</a></li>
+            {{ end }}
+            {{ if $paginator.HasNext }}
+            <li class="next"><a href="{{ $paginator.Next.URL  }}" class="next">Older Posts &rarr;</a></li>
+            {{ end }}
+          </ul>
+        </div>
+      </div>
+    </div>
+
+{{ partial "footer.html" .}}

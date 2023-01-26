@@ -1,0 +1,31 @@
+{{ partial "header.html" .}}
+
+    <!-- Page Header -->
+    {{ if .Site.Params.IndexImage }}
+    <header class="intro-header" style="background-image: url('{{ .Site.BaseURL }}/{{ .Site.Params.IndexImage }}')">
+    {{ else }}
+    <header class="intro-header">
+    {{ end }}
+      <div class="overlay">
+        <div class="container">
+          <div class="row">
+            <div class="col-lg-8 col-lg-offset-2 col-md-10 col-md-offset-1">
+              <div class="site-heading">
+                <h1>404</h1>
+                <hr class="small">
+                <span class="subheading">Page not found!</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <!-- Main Content -->
+    <div class="container">
+      <div class="col-lg-8 col-lg-offset-2 col-md-10 col-md-offset-1">
+        Sorry, the page or post may have been moved or no longer exists.
+      </div>
+    </div>
+
+{{ partial "footer.html" .}}

@@ -1,0 +1,1 @@
+hugo serve -Dw -t bootstrap -d dev --cleanDestinationDir

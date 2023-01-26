@@ -1,0 +1,18 @@
+name = "Startbootstrap Clean Blog"
+license = "Apache 2.0"
+licenselink = "https://github.com/humboldtux/startbootstrap-clean-blog/blob/master/LICENSE.md"
+description = "Startbootstrap Clean Blog"
+homepage = "https://github.com/humboldtux/startbootstrap-clean-blog"
+tags = ["blog", "bootstrap"]
+features = ["blog", "bootstrap"]
+min_version = 0.18
+
+[author]
+  name = "Benoît Benedetti"
+  homepage = "http://www.humboldtux.com"
+
+# original theme
+[original]
+  name = "Startbootstrap Clean Blog"
+  homepage = "http://startbootstrap.com/template-overviews/clean-blog/"
+  repo = "https://github.com/IronSummitMedia/startbootstrap-clean-blog"

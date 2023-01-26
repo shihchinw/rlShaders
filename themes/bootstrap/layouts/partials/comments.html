@@ -1,0 +1,4 @@
+{{ if or (not (isset .Params "comments")) (ne .Params.Comments false) }}
+    <hr>
+    {{ template "_internal/disqus.html" . }}
+{{ end }}

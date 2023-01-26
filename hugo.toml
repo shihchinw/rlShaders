@@ -1,0 +1,76 @@
+baseurl = "http://shihchinw.github.io/rlShaders"
+title = "rlShaders"
+
+languageCode = "en-us"
+copyright = "Copyright © Shih-Chin"
+googleAnalytics = "G-336629647"
+disqusShortname = "shihchinw"
+
+contentDir = "content"
+layoutDir = "layouts"
+publishDir = "public"
+preserveTaxonomyNames = true
+canonifyurls = true
+uglyurls = true
+
+[permalinks]
+  post = "/:year/:month/:title/"
+
+[author]
+  name = "Shih-Chin"
+
+[params]
+  dateForm = "Sun, Jul 5, 2015"
+  description = "Physically-based shading experiments in Arnold renderer."
+  author = "Shih-Chin"
+  email = "shihchin.weng@gmail.com"
+  showReadTime = false
+  indexImage = "images/index.jpg"
+  paginate = 7
+  paginatePath = "page"
+
+[taxonomies]
+  tag = "tags"
+
+[markup]
+  [markup.goldmark]
+    # https://gohugo.io/getting-started/configuration-markup/#goldmark
+    [markup.goldmark.renderer]
+    unsafe = true # Allow HTML in md files
+  [markup.tableOfContents]
+    endLevel = 3
+    ordered = false
+    startLevel = 1
+
+[[params.social]]
+  title = "twitter"
+  url = "https://twitter.com/shihchinw"
+
+[[params.social]]
+  title = "github"
+  url = "https://github.com/shihchinw"
+
+[[menu.main]]
+  name = "home"
+  url = "/"
+  weight = -200
+
+[[menu.main]]
+  name = "Blog"
+  url = "http://shihchinw.github.io/"
+  weight = -180
+
+[[menu.main]]
+  name = "Install"
+  url = "/page/install.html"
+  weight = -170
+
+[[menu.main]]
+  name = "References"
+  url = "/page/references.html"
+  weight = -160
+
+[[menu.main]]
+  name = "Github"
+  url = "https://github.com/shihchinw/rlShaders"
+  weight = -100

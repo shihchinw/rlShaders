@@ -1,0 +1,10 @@
+<small><span class="fa-stack fa-sm"><i class="fa fa-tags fa-stack-1x"></i></span></small>
+{{ range $index, $tag :=  .Params.tags }}
+  <small>
+  {{- if eq $index 0 -}}
+    <a href="/tags/{{ urlize . }}">{{ . }}</a>
+  {{- else -}}
+    , <a href="/tags/{{ urlize . }}">{{ . }}</a>
+  {{- end -}}
+  </small>
+{{ end }}

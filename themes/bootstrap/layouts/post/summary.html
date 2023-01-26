@@ -1,0 +1,19 @@
+<div class="post-preview">
+  <a href="{{ .Permalink }}">
+    <h2 class="post-title">{{ .Title }}</h2></a>
+      <div class="post-meta">
+        {{ partial "meta.html" .}}
+      </div>
+  <h3 class="post-subtitle">{{ .Description }}</h3>
+  {{ if .Params.CoverImage }}
+  <a href="{{ .Permalink }}"><img src="{{ .Site.BaseURL }}/{{ .Params.CoverImage }}" class="img-responsive"></a>
+  {{ end }}
+  <div class="summary-content">
+    {{ .Summary }}
+    {{ if .Truncated }}
+    <a class="read-more-link" href="{{ .RelPermalink }}">» read more »</a>
+    {{ end }}
+  </div>
+  {{ partial "tags.html" .}}
+</div>
+<hr>
